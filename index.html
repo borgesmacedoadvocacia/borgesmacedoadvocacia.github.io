@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Central de Dashboards | Borges Macedo</title>
+<link rel="icon" type="image/png" href="favicon.png" />
+<script>
+// A central nunca roda dentro de outra página
+if (window.self !== window.top) { try { window.top.location.replace(window.location.href); } catch (e) {} }
+</script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  * { -webkit-tap-highlight-color: transparent; }
+
+  :root {
+    --bg: #0f1117;
+    --bg2: #161b26;
+    --bg3: #1e2536;
+    --bg4: #232c42;
+    --azul: #2563eb;
+    --azul-claro: #3b82f6;
+    --verde: #22c55e;
+    --vermelho: #ef4444;
+    --amarelo: #f59e0b;
+    --texto: #e2e8f0;
+    --texto-muted: #64748b;
+    --borda: #1e2d4a;
+    --radius: 12px;
+    --sidebar-w: 292px;
+  }
+
+  html { font-size: 15px; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+  html, body { height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--texto);
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    overflow: hidden;
+  }
+  .oculto { display: none !important; }
+
+  /* ===== LOGIN ===== */
+  .login-overlay {
+    position: fixed; inset: 0; z-index: 1000;
+    background: radial-gradient(circle at 50% 0%, #1a2338 0%, var(--bg) 62%);
+    display: flex; align-items: center; justify-content: center; padding: 1.25rem;
+  }
+  .login-caixa {
+    width: 100%; max-width: 372px;
+    background: var(--bg2); border: 1px solid var(--borda);
+    border-radius: 16px; padding: 2rem 1.75rem;
+    box-shadow: 0 18px 60px rgba(0,0,0,0.55);
+  }
+  .login-logo { display: block; height: 46px; margin: 0 auto 1.15rem; object-fit: contain; }
+  .login-titulo { text-align: center; font-size: 1.02rem; font-weight: 700; letter-spacing: 0.02em; }
+  .login-sub {
+    text-align: center; font-size: 0.72rem; color: var(--texto-muted);
+    text-transform: uppercase; letter-spacing: 0.1em; margin-top: 0.25rem; margin-bottom: 1.6rem;
+  }
+  .campo-grupo { margin-bottom: 0.9rem; }
+  .campo-rotulo {
+    display: block; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--texto-muted); font-weight: 700; margin-bottom: 0.35rem;
+  }
+  .campo-texto {
+    width: 100%; background: var(--bg3); border: 1px solid var(--borda);
+    color: var(--texto); border-radius: 9px; padding: 0.68rem 0.85rem;
+    font-size: 0.92rem; font-family: inherit; outline: none; transition: border-color .15s;
+  }
+  .campo-texto:focus { border-color: var(--azul-claro); }
+  .campo-texto::placeholder { color: #47536b; }
+  .btn-entrar {
+    width: 100%; margin-top: 0.5rem; padding: 0.72rem;
+    background: var(--azul); border: none; border-radius: 9px;
+    color: #fff; font-size: 0.92rem; font-weight: 700; font-family: inherit;
+    cursor: pointer; transition: background .15s;
+  }
+  .btn-entrar:hover:not(:disabled) { background: var(--azul-claro); }
+  .btn-entrar:disabled { opacity: 0.6; cursor: default; }
+  .login-erro {
+    margin-top: 0.9rem; padding: 0.6rem 0.75rem; border-radius: 8px;
+    background: rgba(239,68,68,0.12); border: 1px solid rgba(239,68,68,0.45);
+    color: #fca5a5; font-size: 0.79rem; line-height: 1.45; text-align: center;
+  }
+  .login-rodape {
+    margin-top: 1.35rem; padding-top: 1rem; border-top: 1px solid var(--borda);
+    font-size: 0.7rem; color: var(--texto-muted); text-align: center; line-height: 1.55;
+  }
+
+  /* ===== APP ===== */
+  .app { display: flex; height: 100%; }
+
+  .sidebar {
+    width: var(--sidebar-w); flex-shrink: 0; height: 100%;
+    background: var(--bg2); border-right: 1px solid var(--borda);
+    display: flex; flex-direction: column;
+    transition: transform .22s ease;
+  }
+  .sidebar-topo {
+    display: flex; align-items: center; gap: 0.7rem;
+    padding: 1.05rem 1.15rem; border-bottom: 1px solid var(--borda);
+  }
+  .sidebar-logo { height: 36px; width: auto; object-fit: contain; }
+  .sidebar-nome { display: flex; flex-direction: column; line-height: 1.25; }
+  .sidebar-nome b { font-size: 0.86rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; }
+  .sidebar-nome span { font-size: 0.62rem; color: var(--texto-muted); letter-spacing: 0.1em; text-transform: uppercase; }
+
+  .nav { flex: 1; overflow-y: auto; padding: 0.9rem 0.75rem 1rem; }
+  .nav::-webkit-scrollbar { width: 8px; }
+  .nav::-webkit-scrollbar-thumb { background: var(--bg4); border-radius: 4px; }
+  .nav-grupo { margin-bottom: 1.1rem; }
+  .nav-grupo-titulo {
+    font-size: 0.64rem; text-transform: uppercase; letter-spacing: 0.12em;
+    color: var(--texto-muted); font-weight: 700; padding: 0 0.55rem; margin-bottom: 0.4rem;
+  }
+  .nav-item {
+    display: block; width: 100%; text-align: left;
+    background: transparent; border: 1px solid transparent; border-radius: 9px;
+    color: #b6c2d6; font-size: 0.86rem; font-weight: 500; font-family: inherit;
+    padding: 0.58rem 0.7rem; margin-bottom: 2px; cursor: pointer;
+    transition: background .13s, color .13s, border-color .13s;
+    position: relative; line-height: 1.35;
+  }
+  .nav-item:hover { background: var(--bg3); color: var(--texto); }
+  .nav-item.ativo {
+    background: rgba(37,99,235,0.16); border-color: rgba(59,130,246,0.35);
+    color: #dbe7ff; font-weight: 600;
+  }
+  .nav-item.ativo::before {
+    content: ''; position: absolute; left: -0.75rem; top: 20%; bottom: 20%;
+    width: 3px; border-radius: 2px; background: var(--azul-claro);
+  }
+
+  .sidebar-rodape { padding: 0.85rem 1rem; border-top: 1px solid var(--borda); }
+  .btn-sair {
+    width: 100%; background: transparent; border: 1px solid rgba(255,255,255,0.14);
+    border-radius: 8px; color: var(--texto-muted); font-size: 0.8rem; font-family: inherit;
+    padding: 0.5rem 0.6rem; cursor: pointer; transition: all .15s;
+  }
+  .btn-sair:hover { color: var(--vermelho); border-color: var(--vermelho); }
+  .sidebar-nota {
+    margin-top: 0.55rem; font-size: 0.64rem; color: var(--texto-muted);
+    text-align: center; line-height: 1.5;
+  }
+
+  /* ===== ÁREA PRINCIPAL ===== */
+  .principal { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  .topbar {
+    display: flex; align-items: center; gap: 0.75rem;
+    padding: 0.62rem 1rem; background: var(--bg2); border-bottom: 1px solid var(--borda);
+  }
+  .btn-menu {
+    display: none; background: transparent; border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 8px; color: var(--texto); font-size: 1rem; font-family: inherit;
+    padding: 0.32rem 0.6rem; cursor: pointer;
+  }
+  .topbar-titulo {
+    flex: 1; font-size: 0.92rem; font-weight: 600; letter-spacing: 0.01em;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .btn-topo {
+    display: inline-flex; align-items: center; gap: 0.4rem;
+    padding: 0.38rem 0.8rem; background: transparent;
+    border: 1px solid rgba(255,255,255,0.15); border-radius: 8px;
+    color: var(--texto); font-size: 0.78rem; font-weight: 500;
+    cursor: pointer; font-family: inherit; transition: background .15s, border-color .15s;
+    white-space: nowrap;
+  }
+  .btn-topo:hover { background: rgba(255,255,255,0.07); border-color: rgba(255,255,255,0.3); }
+  .btn-nova-aba { text-decoration: none; }
+
+  .palco { flex: 1; position: relative; background: var(--bg); }
+  .palco iframe {
+    position: absolute; inset: 0; width: 100%; height: 100%;
+    border: 0; background: var(--bg);
+  }
+
+  .carregando {
+    position: absolute; inset: 0; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 1rem;
+    background: var(--bg); z-index: 5; pointer-events: none;
+    transition: opacity .25s;
+  }
+  .carregando.some { opacity: 0; }
+  .spinner {
+    width: 40px; height: 40px; border-radius: 50%;
+    border: 3px solid var(--bg4); border-top-color: var(--azul-claro);
+    animation: girar 0.9s linear infinite;
+  }
+  @keyframes girar { to { transform: rotate(360deg); } }
+  .carregando-texto { font-size: 0.82rem; color: var(--texto-muted); text-align: center; line-height: 1.6; padding: 0 1.5rem; }
+
+  .backdrop {
+    display: none; position: fixed; inset: 0; z-index: 190;
+    background: rgba(5,8,15,0.6);
+  }
+
+  @media (max-width: 900px) {
+    .sidebar {
+      position: fixed; left: 0; top: 0; bottom: 0; z-index: 200;
+      transform: translateX(-102%);
+      box-shadow: 0 0 50px rgba(0,0,0,0.6);
+    }
+    .sidebar.aberta { transform: translateX(0); }
+    .backdrop.visivel { display: block; }
+    .btn-menu { display: inline-flex; }
+  }
+</style>
+</head>
+<body>
+
+<div class="login-overlay" id="loginOverlay">
+  <form class="login-caixa" id="loginForm" autocomplete="on">
+    <img src="logo.png" alt="Borges Macedo Advocacia" class="login-logo" onerror="this.style.display='none'" />
+    <div class="login-titulo">Central de Dashboards</div>
+    <div class="login-sub">Borges Macedo Advocacia</div>
+
+    <div class="campo-grupo">
+      <label class="campo-rotulo" for="campoUsuario">Login</label>
+      <input class="campo-texto" type="text" id="campoUsuario" name="username"
+             autocomplete="username" placeholder="Usuário" required />
+    </div>
+    <div class="campo-grupo">
+      <label class="campo-rotulo" for="campoSenha">Senha</label>
+      <input class="campo-texto" type="password" id="campoSenha" name="password"
+             autocomplete="current-password" placeholder="••••••••" required />
+    </div>
+
+    <button type="submit" class="btn-entrar" id="btnEntrar">Entrar</button>
+    <div class="login-erro oculto" id="loginErro"></div>
+
+    <div class="login-rodape">
+      Acesso único a todos os dashboards do escritório.<br />
+      A sessão termina ao fechar a aba.
+    </div>
+  </form>
+</div>
+
+<div class="app oculto" id="app">
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-topo">
+      <img src="logo.png" alt="" class="sidebar-logo" onerror="this.style.display='none'" />
+      <div class="sidebar-nome">
+        <b>Borges Macedo</b>
+        <span>Central de Dashboards</span>
+      </div>
+    </div>
+    <nav class="nav" id="nav"></nav>
+    <div class="sidebar-rodape">
+      <button class="btn-sair" id="btnSair">Encerrar sessão</button>
+      <div class="sidebar-nota">A sessão termina ao fechar a aba.</div>
+    </div>
+  </aside>
+
+  <div class="backdrop" id="backdrop"></div>
+
+  <main class="principal">
+    <div class="topbar">
+      <button class="btn-menu" id="btnMenu" aria-label="Abrir menu">&#9776;</button>
+      <div class="topbar-titulo" id="tituloAtual">—</div>
+      <button class="btn-topo" id="btnAtualizar" title="Recarregar o dashboard aberto">&#10227; Atualizar</button>
+    </div>
+    <div class="palco" id="palco">
+      <div class="carregando oculto" id="carregando">
+        <div class="spinner"></div>
+        <div class="carregando-texto" id="carregandoTexto">Carregando…</div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+/* =========================================================================
+   CENTRAL DE DASHBOARDS — Borges Macedo Advocacia
+
+   A lista de dashboards fica cifrada no COFRE (AES-256-GCM). A chave é
+   derivada do login + senha via PBKDF2-SHA256 (310 mil iterações). Senha
+   errada = decifragem falha = sem menu e sem acesso.
+
+   Depois do login, a central guarda na sessão da aba (sessionStorage,
+   compartilhado com os dashboards por estarem na mesma origem):
+     bm_portal_auth  — marca que a sessão do portal está ativa
+     bm_portal_cred  — credenciais para os dashboards cifrados se destravarem
+     bm_portal_sessao— menu decifrado, para retomar a sessão da aba
+   Cada dashboard remaneja qualquer acesso direto de volta para cá.
+   ========================================================================= */
+
+const COFRE = {
+  v: 1,
+  it: 310000,
+  salt: 'OrRUeAvpGBWWatCW1X5DaQ==',
+  iv: 'zC1FJk93UqZMOPpt',
+  ct: 'e+BuqRT9qF6T6jaA+wz7oUgUxkStcs5JBsJk1ztrnRRbXbbiKaekDNr/rT9kGee6w/xA8Qp/lcGiYsdvpBg4cbh/cs40FvBVAlHHmOlnjf6bskQZk3wuJYOr6S2s5HmVa6meXk+GyuH3ZIP8t19Fr/lEbEprd+trWBbvs4PKofv4OPNEGpcljl9c4NV+TiVAs1p89uyroIi8fdWXdsDt5tFvwUkEJPoNmO/AYssabyf0OZYSJBp9Tn5j9meMM7Fv/c0xJ6A36SPVCAK5/TAjb3SwGdAfNT+O+Slx08pNcdaBdDKm9BPI5IP1mmUlJwdV8OyR3UZ+eg11dxpVG0/wfKpNgvE50tTByoMtdGyGbuRY8dNDkCy9G7IUpe04h1CdAsWPX3MBTEOt+8Ilbj4oci7HWF988RjZjUsNqOn2V7wxRsfV3dMwGoVTZx0/tdS+i9AfCw5vyIvarA71dz0hlA0BFAzFsT1dwL51sCdRPzcqhLZtozuBZYLFLHPu8k1iQqyvLrxkfpd4ODYn1ubGJT7fbhxmkCYMWpH5jX+I9lOHjoU1fX45DoaL0XYnl1qYw/5qJOoEFRVf/SuPmDCUzXFERgHKWd0OXtnUWk0FIVXmqNXmA3tpaNGVeH8uBbyRwZT635M5qiOr4iYB0aNKyUOzZ82CCwtaBYjCAmVAB4Ydkt7yD3OPD9c/qPYHkcvC5GrUP3mH4trcxShE3J6eq+OPX3lmdQFbm3GCRpSkZKJNlm8VbER+M9cK+FgWpJb8/8Lsw0S42LWvD0HE3TmCpURX73XErBZbsnNn6HiEfztNtrKc9ZtyCDpFXYiyjLBTazXqWtcP552/+byonAxB33oP91VLJMyploxfF3JiPTSBiSKxt79OVJL9M4K5g1hyKN8kdnWonn5r/Mq8E725X9jk5zXDYeLwQOVPrEZwxok9RmKLC2j7E6Bzddn5faTtFJyIhGd30Ri5PQDol5y95CTz4/X1BOT/sbdB9fe5FM/jQKwh+1jaukxQ84Ha85ECavjk3JYZvFf2kAcrWtxDzYa9c5wp5J2JbMsgoJMzLM72AWOj3No73cvlWewpYreXIVGPVHo9UV1DH8oxEUlCvr5ldDmxDXwERvyfgZoS8PUe/W/RPfjXyBgBJTzSrRDknM7Wl4+SV/IqiFa2tQTyPCAnZXPPKfai8mjW0BRFte00bWsfJxQoRfOTTvwT97cW03uXanOuSoqsFi5T6EnoXUU/EWkKqPyL/AT7JcysvoKES7dMRVZd7qKDLSMBvaOM/MIbf/FgPodURwMUR+ust8JeuWGzNc4Pqg218s5KgHWcGInCSQ2Ncg+E84lSpo+pllq1Zfhe5JA122r7FXlcL7laf1M2NvqnDjZdM9ZdK1l3Y0vPawpV3f0rv+aH8SUVppHVXBIhiO6DXhm+s2ezV56JKsClDI4ZLzEBqu36M4tp/2wmaoLLO/ndESVYliEWq8IqML1ybCRXHDDZaZczZsZaFA3lcic9IWfolGk05zJPczxIN3uckToHSa+YH6gRNT14+CYfC2UaMcMPzLDdODEfqkiIK1Nf+nthwFObZc2HE9M2g5Q1oXZ9RGOrkzrwWnOZqsw+/3b2OQ=='
+};
+
+const K_SESSAO = 'bm_portal_sessao';
+const K_AUTH   = 'bm_portal_auth';
+const K_CRED   = 'bm_portal_cred';
+const K_ATIVO  = 'bm_portal_ativo';
+
+let MENU = null;
+const frames = {};   // id -> iframe (mantidos vivos para a troca ser instantânea)
+let ativo = null;
+
+/* ---------- cofre ---------- */
+const b64bytes = b64 => Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+
+async function abrirCofre(usuario, senha) {
+  const enc = new TextEncoder();
+  const material = await crypto.subtle.importKey(
+    'raw', enc.encode(usuario.trim().toLowerCase() + '\n' + senha),
+    'PBKDF2', false, ['deriveKey']
+  );
+  const chave = await crypto.subtle.deriveKey(
+    { name: 'PBKDF2', salt: b64bytes(COFRE.salt), iterations: COFRE.it, hash: 'SHA-256' },
+    material, { name: 'AES-GCM', length: 256 }, false, ['decrypt']
+  );
+  const claro = await crypto.subtle.decrypt(
+    { name: 'AES-GCM', iv: b64bytes(COFRE.iv) }, chave, b64bytes(COFRE.ct)
+  );
+  return JSON.parse(new TextDecoder().decode(claro));
+}
+
+/* ---------- montagem ---------- */
+function montarMenu() {
+  const nav = document.getElementById('nav');
+  nav.innerHTML = '';
+  for (const grupo of MENU.grupos) {
+    const bloco = document.createElement('div');
+    bloco.className = 'nav-grupo';
+    const titulo = document.createElement('div');
+    titulo.className = 'nav-grupo-titulo';
+    titulo.textContent = grupo.nome;
+    bloco.appendChild(titulo);
+    for (const item of grupo.itens) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'nav-item';
+      btn.textContent = item.nome;
+      btn.dataset.id = item.id;
+      btn.addEventListener('click', () => { abrirDashboard(item.id); fecharDrawer(); });
+      bloco.appendChild(btn);
+    }
+    nav.appendChild(bloco);
+  }
+}
+
+function acharItem(id) {
+  for (const g of MENU.grupos) for (const i of g.itens) if (i.id === id) return i;
+  return null;
+}
+
+function abrirDashboard(id) {
+  const item = acharItem(id);
+  if (!item) return;
+  ativo = id;
+  try { sessionStorage.setItem(K_ATIVO, id); } catch (e) {}
+
+  document.querySelectorAll('.nav-item').forEach(b =>
+    b.classList.toggle('ativo', b.dataset.id === id));
+  document.getElementById('tituloAtual').textContent = item.nome;
+  document.title = item.nome + ' | Borges Macedo';
+
+  for (const [fid, fr] of Object.entries(frames)) fr.style.display = fid === id ? 'block' : 'none';
+
+  if (!frames[id]) {
+    mostrarCarregando(item);
+    const fr = document.createElement('iframe');
+    fr.title = item.nome;
+    fr.allow = 'fullscreen';
+    fr.addEventListener('load', () => { if (ativo === id) esconderCarregando(); });
+    fr.src = item.url;
+    frames[id] = fr;
+    document.getElementById('palco').appendChild(fr);
+  } else {
+    esconderCarregando();
+  }
+}
+
+function mostrarCarregando(item) {
+  const el = document.getElementById('carregando');
+  document.getElementById('carregandoTexto').innerHTML =
+    'Carregando <b>' + item.nome + '</b>…' +
+    (item.lenta ? '<br /><small>Este serviço hiberna quando fica ocioso — a primeira abertura pode levar até 1 minuto.</small>' : '');
+  el.classList.remove('oculto');
+  requestAnimationFrame(() => el.classList.remove('some'));
+}
+function esconderCarregando() {
+  const el = document.getElementById('carregando');
+  el.classList.add('some');
+  setTimeout(() => el.classList.add('oculto'), 260);
+}
+
+function entrarNaCentral(menu, cred, guardar) {
+  MENU = menu;
+  if (guardar) {
+    try {
+      sessionStorage.setItem(K_SESSAO, JSON.stringify(menu));
+      sessionStorage.setItem(K_AUTH, '1');
+      if (cred) sessionStorage.setItem(K_CRED, JSON.stringify(cred));
+    } catch (e) {}
+  }
+  document.getElementById('loginOverlay').classList.add('oculto');
+  document.getElementById('app').classList.remove('oculto');
+  montarMenu();
+
+  let inicial = null;
+  try { inicial = sessionStorage.getItem(K_ATIVO); } catch (e) {}
+  if (!inicial || !acharItem(inicial)) inicial = MENU.grupos[0].itens[0].id;
+  abrirDashboard(inicial);
+}
+
+/* ---------- eventos ---------- */
+document.getElementById('loginForm').addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  const btn = document.getElementById('btnEntrar');
+  const erroEl = document.getElementById('loginErro');
+  const usuario = document.getElementById('campoUsuario').value;
+  const senha = document.getElementById('campoSenha').value;
+
+  erroEl.classList.add('oculto');
+  btn.disabled = true;
+  btn.textContent = 'Verificando…';
+  await new Promise(r => setTimeout(r, 30));
+
+  try {
+    const menu = await abrirCofre(usuario, senha);
+    btn.textContent = 'Entrando…';
+    entrarNaCentral(menu, { u: usuario, s: senha }, true);
+  } catch (e) {
+    btn.disabled = false;
+    btn.textContent = 'Entrar';
+    erroEl.classList.remove('oculto');
+    erroEl.textContent = 'Login ou senha incorretos.';
+    document.getElementById('campoSenha').value = '';
+    document.getElementById('campoSenha').focus();
+  }
+});
+
+document.getElementById('btnSair').addEventListener('click', () => {
+  try { sessionStorage.clear(); } catch (e) {}
+  location.reload();
+});
+
+document.getElementById('btnAtualizar').addEventListener('click', () => {
+  if (!ativo || !frames[ativo]) return;
+  const item = acharItem(ativo);
+  mostrarCarregando(item);
+  try { frames[ativo].contentWindow.location.reload(); }
+  catch (e) { frames[ativo].src = item.url; }
+});
+
+/* drawer mobile */
+function fecharDrawer() {
+  document.getElementById('sidebar').classList.remove('aberta');
+  document.getElementById('backdrop').classList.remove('visivel');
+}
+document.getElementById('btnMenu').addEventListener('click', () => {
+  document.getElementById('sidebar').classList.add('aberta');
+  document.getElementById('backdrop').classList.add('visivel');
+});
+document.getElementById('backdrop').addEventListener('click', fecharDrawer);
+
+/* retoma a sessão desta aba, se houver */
+(function iniciar() {
+  let salvo = null;
+  try { salvo = sessionStorage.getItem(K_SESSAO); } catch (e) {}
+  if (salvo) {
+    try { entrarNaCentral(JSON.parse(salvo), null, false); return; } catch (e) {}
+  }
+  document.getElementById('campoUsuario').focus();
+})();
+</script>
+</body>
+</html>
