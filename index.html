@@ -242,7 +242,7 @@ if (window.self !== window.top) { try { window.top.location.replace(window.locat
     <nav class="nav" id="nav"></nav>
     <div class="sidebar-rodape">
       <button class="btn-sair" id="btnSair">Encerrar sessão</button>
-      <div class="sidebar-nota">A sessão termina ao fechar a aba.</div>
+      <div class="sidebar-nota" id="sidebarNota">A sessão termina ao fechar a aba.</div>
     </div>
   </aside>
 
@@ -267,25 +267,34 @@ if (window.self !== window.top) { try { window.top.location.replace(window.locat
 /* =========================================================================
    CENTRAL DE DASHBOARDS — Borges Macedo Advocacia
 
-   A lista de dashboards fica cifrada no COFRE (AES-256-GCM). A chave é
-   derivada do login + senha via PBKDF2-SHA256 (310 mil iterações). Senha
-   errada = decifragem falha = sem menu e sem acesso.
+   Cada PERFIL de acesso tem o seu próprio COFRE (AES-256-GCM) com o menu
+   que aquele perfil pode ver. A chave é derivada do login + senha via
+   PBKDF2-SHA256 (310 mil iterações). O login testa os cofres na ordem:
+   o que a senha decifrar define o menu. Senha errada = nenhum decifra =
+   sem menu e sem acesso. Um perfil não tem como decifrar o menu do outro.
 
    Depois do login, a central guarda na sessão da aba (sessionStorage,
    compartilhado com os dashboards por estarem na mesma origem):
      bm_portal_auth  — marca que a sessão do portal está ativa
      bm_portal_cred  — credenciais para os dashboards cifrados se destravarem
+                       (cada dashboard cifrado tem um cofre por perfil
+                       autorizado; perfil sem cofre lá não destrava nada)
      bm_portal_sessao— menu decifrado, para retomar a sessão da aba
    Cada dashboard remaneja qualquer acesso direto de volta para cá.
+
+   Para trocar senhas ou perfis, gere novos cofres (mesmo formato do
+   gerar-senha.html dos dashboards, com o menu como payload) e substitua
+   as entradas de COFRES abaixo.
    ========================================================================= */
 
-const COFRE = {
-  v: 1,
-  it: 310000,
-  salt: 'OrRUeAvpGBWWatCW1X5DaQ==',
-  iv: 'zC1FJk93UqZMOPpt',
-  ct: 'e+BuqRT9qF6T6jaA+wz7oUgUxkStcs5JBsJk1ztrnRRbXbbiKaekDNr/rT9kGee6w/xA8Qp/lcGiYsdvpBg4cbh/cs40FvBVAlHHmOlnjf6bskQZk3wuJYOr6S2s5HmVa6meXk+GyuH3ZIP8t19Fr/lEbEprd+trWBbvs4PKofv4OPNEGpcljl9c4NV+TiVAs1p89uyroIi8fdWXdsDt5tFvwUkEJPoNmO/AYssabyf0OZYSJBp9Tn5j9meMM7Fv/c0xJ6A36SPVCAK5/TAjb3SwGdAfNT+O+Slx08pNcdaBdDKm9BPI5IP1mmUlJwdV8OyR3UZ+eg11dxpVG0/wfKpNgvE50tTByoMtdGyGbuRY8dNDkCy9G7IUpe04h1CdAsWPX3MBTEOt+8Ilbj4oci7HWF988RjZjUsNqOn2V7wxRsfV3dMwGoVTZx0/tdS+i9AfCw5vyIvarA71dz0hlA0BFAzFsT1dwL51sCdRPzcqhLZtozuBZYLFLHPu8k1iQqyvLrxkfpd4ODYn1ubGJT7fbhxmkCYMWpH5jX+I9lOHjoU1fX45DoaL0XYnl1qYw/5qJOoEFRVf/SuPmDCUzXFERgHKWd0OXtnUWk0FIVXmqNXmA3tpaNGVeH8uBbyRwZT635M5qiOr4iYB0aNKyUOzZ82CCwtaBYjCAmVAB4Ydkt7yD3OPD9c/qPYHkcvC5GrUP3mH4trcxShE3J6eq+OPX3lmdQFbm3GCRpSkZKJNlm8VbER+M9cK+FgWpJb8/8Lsw0S42LWvD0HE3TmCpURX73XErBZbsnNn6HiEfztNtrKc9ZtyCDpFXYiyjLBTazXqWtcP552/+byonAxB33oP91VLJMyploxfF3JiPTSBiSKxt79OVJL9M4K5g1hyKN8kdnWonn5r/Mq8E725X9jk5zXDYeLwQOVPrEZwxok9RmKLC2j7E6Bzddn5faTtFJyIhGd30Ri5PQDol5y95CTz4/X1BOT/sbdB9fe5FM/jQKwh+1jaukxQ84Ha85ECavjk3JYZvFf2kAcrWtxDzYa9c5wp5J2JbMsgoJMzLM72AWOj3No73cvlWewpYreXIVGPVHo9UV1DH8oxEUlCvr5ldDmxDXwERvyfgZoS8PUe/W/RPfjXyBgBJTzSrRDknM7Wl4+SV/IqiFa2tQTyPCAnZXPPKfai8mjW0BRFte00bWsfJxQoRfOTTvwT97cW03uXanOuSoqsFi5T6EnoXUU/EWkKqPyL/AT7JcysvoKES7dMRVZd7qKDLSMBvaOM/MIbf/FgPodURwMUR+ust8JeuWGzNc4Pqg218s5KgHWcGInCSQ2Ncg+E84lSpo+pllq1Zfhe5JA122r7FXlcL7laf1M2NvqnDjZdM9ZdK1l3Y0vPawpV3f0rv+aH8SUVppHVXBIhiO6DXhm+s2ezV56JKsClDI4ZLzEBqu36M4tp/2wmaoLLO/ndESVYliEWq8IqML1ybCRXHDDZaZczZsZaFA3lcic9IWfolGk05zJPczxIN3uckToHSa+YH6gRNT14+CYfC2UaMcMPzLDdODEfqkiIK1Nf+nthwFObZc2HE9M2g5Q1oXZ9RGOrkzrwWnOZqsw+/3b2OQ=='
-};
+const COFRES = [
+  /* Administração — acesso a tudo */
+  {"v":1,"it":310000,"salt":"APHiXNCjRcxIMoEE0iZarg==","iv":"htYz8uB0Lp82r/iG","ct":"BwvLYXpuqJFsTdONmfyaFHBPdQlyvb3eFJUNXALAAXtzP5CTOnpGfQv6WFmCX+TjOhk3TDOGIqu3l1MjIdSn04/muYznpuKkPBSQEKqMIGyF5o6D1xQPAZZDYBEeUlEDcCXBT0YHcO7PRnG8bQsT9e3xgAX2bHioU7YCwG9UnMEdDGDb32aXzj/X0vEgGqjZWOWbIITWrqTkV4J+BYe5Mf4NShntvc0S9a+u3mS563rgE12Oe/Rj9tfILoFELPaQOeOLAM3IsN7Qewxk4PgwaQRaV5yOME5o0V4bCPGle1YiW/0P3ISsgcVOZnQOBQCxqXr2dIEh9mXo4YhN6h+BqKlUSjubYIBdMdLdOIVxO0V7MttYhv2Ob48VJsjT6VmxSghsSKZwCW7sdLFP4H8jP8sdLO6pZfYSHh9W9z1GKhhF+o87/gW0Yc0ZCjAq3oh320c8QqWE1HTjW6Z8Db4JxvnH1/Y5dxHMlv69QW1sW6hqAmhiy7ZVlEsTPa7LpWJsOEQOmDecyg9jNmCFs75NKRm4kYYvi9ldIUo8HEXcL25AZiJjKt3xFBwvvrIY+agWYhnWrjdzOkC95V0jigykfMxwB5uT5ejTalop4ldD0GMd9C4ruluhVLbMc+iC9gx/xPrY86rBPvIOkfRwLaQRZlnHzzoj/36g0ZfLQ0QLyBgt8UWs8jkxYQaTCgiFrW2S2Dk51SErfmyanEN2dKuyLN4Rq9tpJzcjglTkiTKHc1CuZx3rpYkABBm9HO3HJdzB/KbgJp1kg4ywYz8j5x24b4ot4PUQ9zyCI44XSsZHk5RUWWk/przuedokfAD8Tdajyu34mnOPv8smozEgIuFpgdIrU+C8Qck69b1LRPcsQWh3rGLTC2R/Lf9Vpe6NJQ1JCpscs4KA4PS3AYeo/jwfHrhHtPNrJqsEDdwIysjBXMaDGPcayYpzP5zybdf54J5OOwQr6s5co+2jwSw4VKJbHTDFJn+JgTUGq6YyU426aUSIFVMPY0DSf2Y7lAp/YbTq+5XcGY+TXsJrStYzSi4cRHFHgUenxpvlte3nnqwKVElq33kdw4KP9lRgd0wPpiAA1mGk0cKUZOak2O/vBvKUcV3pYq9iDZRXTUghRFdVpvrfYKBMVwW5Xaj3DuM4Icoaks4gjvKID81gDylJhoKTFfk1n8LzOSQsMfzIMEGlo+0Ull0O4RsYsW3VGNphXw8246xyWjzYh1yB3BAQOy6gJAlX+jVfwqMi9DYU3wHPZ9G1q4nbGzItih94Xoh0oGQ07pX9xZrQbCEz8L4aJfe9QSL18qQGhw0InKiV18hSG5B78R6oJpr3szjLMu6Jy88/uvzALpxIfTrJMb4ADUTXzXm5xmdn+jA8Moi4xFtFtlZ0jLJjMdhaSRRJkRcKNp4PdGLfaI9mgSfFth6ukjUsPj1FwnxyTjRbRXN8QKs60qU/vmEkIRPSVQzpZGpEA//PE0GYB96LdaIMOcgvBrDOymkleh9jqWp/N98a4R3uOYDTFm7KuPAf+mgyftaI/I3CN1vqa7lK60EerPEO4IBOP5ct53pprXIsvSZX6Xhfm7ZtIxFWlB58Vi7e9QZWbg+PRXknvEH5f2VFsD1fyHr/Ovbl6Xi0muK5vn4DYI+2/EhU8kcQ1g=="},
+  /* Lideranças — acesso a tudo */
+  {"v":1,"it":310000,"salt":"k437z7vF6dZ3JvfJ3gqQ5A==","iv":"jAjk5m9jh1ettNMg","ct":"MAq0HTXXK305rMCNB/jNwQidqhkzdc2QElZzrVAHzM5AGJiB0IwGEGzm4DmBaVzDKGu+JdVMxxosCqjkjmkwsX0zYpLfZ8gziPEIKiSVYu9/DtvvxJps560AdIslA6WxgcQg00yDV9yiQu+w04zIV5sEEKXiBtVOZtrcZcUECVCEVE44oBSFVTR32hoZHUm00iiUOd3WaXvUgHAqAdJdSMyZHLI/0Ot7QpRxuEPCYBTjVrXl7E1DrWErpsST3SYe2KWtlijTlo2D5o5dm8CxJ8BlWJuIke7ZoEe60a54B6sL+PaArwSxbxt6YRUQnReroYaURHt5m8kh0rEEBjGZGUZ1IEjD4Zuxj1oqWgf2m4sCJfY4AKwfrOB72E1s6nbKmCbASg0qFZZyA2C7lua1G3RDRJcnKJjdqhd4Outv0NMDvnRP+tr9vaSuCpSKADTcZRTN+m8i1ksNzpo/fQaMzl24ouFViWZ3fvW6/ESM8chtKajUg8p/ovsCcup7CtZXcf1hdYRqldjs2eVpDUGWzES6vdfYmF8wRj8EHG/a+hivBCs43GtBI4wRDZz/1csvrmZ6YD2hTKJ6qXhBZ08sL3dD3MmEenjlKXwETFWPZCshRzICQ1tl3Jf87hbS5JNmhZyb3ll82CYiwt1QhTho/JPrd4W5jf9bXLsQIJF0/DOy1oi/LVF0lC1KQX10uAN/KgzwnU4FPGPYMSZYAKEI1AO3L/2D9dosPpmNm+pmevcMUM0lBlea2Ogp2iGsegu2SQFmpkblX2y9Sy74TJQONCQGtqHhyBuvUh+O7Ie78yLJG7TS5LUBOQv6oxVFTdWt8FYFI4UuHFxAYQt+GDE3ZsNCdlMKj3BGjVqkrR/57lD0uTWhruKo0iRBk5l+UNOzDrefafP3SLwJ7EpieUmY1ZfaTKImanXXn1qpeqqQSmpy5F7NhbIXS2NaPSH+UKRk+fwqHMS5QEezGeiPBcVT9ZrV9V5+8oY5d0nooO/cpjiW0lSf16SgBxHK7G3qrlAZzuQu0/HJVM21BN62+07pV8nU6Nwz880PpDHwRleOHkNBOCN1l3adljZnCQ7f+K8oF9XAk6yC46LZrpbSOT5wjMsefIr6UqSIWnp0JRi+SOCzvanngDlIeeEIrT+vPKiKN7cHh8xr8/RoppB0P87WF0gAdF2mhbu/HGtfpR0uHiUUkltkYCplTE0lOybG4vXfHfwelstFuVXMaVo8ZgEQk1Cq0oO8bP/J5AoQYd15Xxfbp+9NRaL0aPTwLrN8FGb/z8DDn9TdeI6UURTQV0+sLSI061GN2omKpvKGwgl7taNULbkDpxmZSmqGX+3mbSBI9fQzbIsENfdST2P8UzAEQWyIvYgUry5zjC+rQq/fH4ADfcstbxSkCOlyhXvepBAoPAkvU/MpkRGElufp4cc54869ByT8HgefksPiVvM1QgjP+1aJ49pIn37HxAV+Wd9Ye5eYPPus2QN9/309oavr/xJ66xxIutWc7ekU1VouPdeebOLQtTiAaNER56twTOMJGTBdQFo6kfoOTNDRXKLxL9EegkjoWW8S65ljbR5dHI92NpbMwBgXgYOZm50plkuQPrGXGVajAjflHxG1PipJq9UXwVVXlDlE+ZyrNBlqLw5R"},
+  /* Equipe — Metas e Resultados do Comercial e do Processual */
+  {"v":1,"it":310000,"salt":"69zeXFT83ind0VOn9Mu1mQ==","iv":"L260NZth0C6yQegj","ct":"tAutcy0XJYYge/k5EiDumJMaTFdut8PcG28FfT/8TV7Ui3UqkKN5zgQR7RtaOXhfOYqoLWS8MzVfY9fKCM+ofxPC9WdJzV3BcUKg0jUyQFWNC6F7fJCEyD8QIU0UQIcKcX/UQW4gp1s8QJ8Y46Ua0yvExE4Gpye1gvUvbHA6RKdoDFrGJy+emB5/Li5Dj+9xmdHbX9QUxwxKODGUCwhp4BsWoixy5flg5LMJkhi5yMzNSqn9aKCbsXDNv0GoXHjCW5KPnD2UtZe1PormlxrMSZsuspi+yvD23b6UQY6eoU6eaBRJVvMBHoNeGF/U/rgCAMyDTSRztXoXYU+bgbY3seE8H8Z+YhWt2sOP1a4IB2YWlK67LETW7LpJ98JQgErB2F7pLYKyE7J7ex7ZTd4hmHTPCZ1oVCICTeb9+rBRNRFjPlD9rX8MIDUumHSv8j/63dbQVX5+w0IBRAHrpAuK+tMF2HKUwka1EimaOHrCcFC6eEIdqTdJ+sWpBbuUKgaHyc984LMRiPlj"}
+];
 
 const K_SESSAO = 'bm_portal_sessao';
 const K_AUTH   = 'bm_portal_auth';
@@ -299,20 +308,30 @@ let ativo = null;
 /* ---------- cofre ---------- */
 const b64bytes = b64 => Uint8Array.from(atob(b64), c => c.charCodeAt(0));
 
-async function abrirCofre(usuario, senha) {
+// Aceita o usuário com ou sem acentos ("Lideranças" e "Liderancas" valem igual)
+const normUsuario = u => u.trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+
+async function abrirUmCofre(cofre, usuario, senha) {
   const enc = new TextEncoder();
   const material = await crypto.subtle.importKey(
-    'raw', enc.encode(usuario.trim().toLowerCase() + '\n' + senha),
+    'raw', enc.encode(normUsuario(usuario) + '\n' + senha),
     'PBKDF2', false, ['deriveKey']
   );
   const chave = await crypto.subtle.deriveKey(
-    { name: 'PBKDF2', salt: b64bytes(COFRE.salt), iterations: COFRE.it, hash: 'SHA-256' },
+    { name: 'PBKDF2', salt: b64bytes(cofre.salt), iterations: cofre.it, hash: 'SHA-256' },
     material, { name: 'AES-GCM', length: 256 }, false, ['decrypt']
   );
   const claro = await crypto.subtle.decrypt(
-    { name: 'AES-GCM', iv: b64bytes(COFRE.iv) }, chave, b64bytes(COFRE.ct)
+    { name: 'AES-GCM', iv: b64bytes(cofre.iv) }, chave, b64bytes(cofre.ct)
   );
   return JSON.parse(new TextDecoder().decode(claro));
+}
+
+async function abrirCofre(usuario, senha) {
+  for (const cofre of COFRES) {
+    try { return await abrirUmCofre(cofre, usuario, senha); } catch (e) {}
+  }
+  throw new Error('credenciais inválidas');
 }
 
 /* ---------- montagem ---------- */
@@ -397,6 +416,10 @@ function entrarNaCentral(menu, cred, guardar) {
   document.getElementById('loginOverlay').classList.add('oculto');
   document.getElementById('app').classList.remove('oculto');
   montarMenu();
+  if (menu.perfil) {
+    document.getElementById('sidebarNota').innerHTML =
+      'Perfil: <b>' + menu.perfil + '</b><br />A sessão termina ao fechar a aba.';
+  }
 
   let inicial = null;
   try { inicial = sessionStorage.getItem(K_ATIVO); } catch (e) {}
