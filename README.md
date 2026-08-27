@@ -14,7 +14,7 @@ do outro, e senha errada não decifra nada.
 |---|---|
 | Administração | Todos os dashboards |
 | Lideranças | Todos os dashboards |
-| Equipe | Metas e Resultados — Comercial e Metas e Resultados — Processual |
+| Equipe | Metas e Resultados — Comercial, Metas e Resultados — Processual e Dados do Kommo |
 
 Os dashboards protegidos por cofre próprio (Fluxo Financeiro, Metas
 Processual, Execuções) têm um cofre **por perfil autorizado**: a credencial
