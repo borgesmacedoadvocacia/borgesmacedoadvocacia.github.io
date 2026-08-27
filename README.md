@@ -12,16 +12,17 @@ do outro, e senha errada não decifra nada.
 
 | Perfil | Acesso |
 |---|---|
-| Administração | Todos os dashboards |
-| Lideranças | Todos os dashboards |
+| Administração | Todos os 14 dashboards |
+| Lideranças | Todos os 14 dashboards, inclusive os cinco exclusivos (Alvarás e Acordos, Base de Clientes, CRM Jurídico, Diligências e Controladoria Jurídica) |
 | Equipe | Metas e Resultados — Comercial, Metas e Resultados — Processual e Dados do Kommo |
 
 Os dashboards protegidos por cofre próprio (Fluxo Financeiro, Metas
-Processual, Execuções) têm um cofre **por perfil autorizado**: a credencial
-da Equipe não decifra o Fluxo Financeiro nem as Execuções em hipótese
-alguma — não é só o menu que esconde, é a criptografia que barra. Os
-dashboards sem cofre próprio ficam protegidos pelo redirecionamento para a
-central e pela ausência no menu do perfil.
+Processual, Execuções e os cinco exclusivos das lideranças) têm um cofre
+**por perfil autorizado**: a credencial da Equipe não decifra o Fluxo
+Financeiro, as Execuções nem qualquer painel exclusivo em hipótese alguma —
+não é só o menu que esconde, é a criptografia que barra. Os dashboards sem
+cofre próprio ficam protegidos pelo redirecionamento para a central e pela
+ausência no menu do perfil.
 
 O nome de usuário aceita acentos e caixa livre ("Lideranças", "liderancas"
 e "LIDERANÇAS" valem igual). As senhas não ficam documentadas aqui.
