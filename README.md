@@ -12,8 +12,8 @@ do outro, e senha errada não decifra nada.
 
 | Perfil | Acesso |
 |---|---|
-| Administração | Todos os 14 dashboards |
-| Lideranças | Todos os 14 dashboards, inclusive os cinco exclusivos (Alvarás e Acordos, Base de Clientes, CRM Jurídico, Diligências e Controladoria Jurídica) |
+| Administração | Todos os 15 dashboards |
+| Lideranças | Todos os 15 dashboards, incluindo o **Ambiente do CEO** e os cinco exclusivos (Alvarás e Acordos, Base de Clientes, CRM Jurídico, Diligências e Controladoria Jurídica) |
 | Equipe | Metas e Resultados — Comercial, Metas e Resultados — Processual e Dados do Kommo |
 
 Os dashboards protegidos por cofre próprio (Fluxo Financeiro, Metas
