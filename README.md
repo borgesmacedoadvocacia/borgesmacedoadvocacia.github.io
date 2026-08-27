@@ -38,3 +38,18 @@ Os dashboards continuam hospedados nos seus repositórios de origem e são
 exibidos dentro da central. Por estarem na mesma origem (`github.io`), a
 sessão da central destrava automaticamente os dashboards protegidos por
 cofre que o perfil logado pode ver, sem novo login.
+
+## Incluir um dashboard no menu
+
+O menu de cada perfil vive dentro do cofre daquele perfil — para acrescentar um
+painel é preciso reabrir o cofre, inserir o item e refazê-lo. A ferramenta
+[`atualizar-menu.html`](https://borgesmacedoadvocacia.github.io/atualizar-menu.html)
+faz isso **no próprio navegador**: a senha nunca sai da máquina e nunca é gravada.
+
+1. Preencha grupo, id, nome e URL do dashboard.
+2. Para cada perfil que deve enxergá-lo: usuário + senha › *Incluir e refazer o cofre*.
+3. Perfis que **não** devem vê-lo: *Este perfil não deve ver o painel* (o cofre fica intacto).
+4. Copie o bloco `const COFRES = [ … ];` gerado e substitua o do `index.html`.
+
+O `atualizar-menu.html` guarda uma cópia dos cofres — depois de trocar o
+`index.html`, atualize também a cópia dentro dele.
