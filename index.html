@@ -404,8 +404,41 @@ function esconderCarregando() {
   setTimeout(() => el.classList.add('oculto'), 260);
 }
 
+/* ---------- painéis publicados depois da última geração dos cofres ----------
+   Ficam fora do cofre (nome e URL aparecem no código-fonte), mas continuam
+   protegidos pelo guarda de cada dashboard: sem a sessão do portal, o acesso
+   direto é remanejado para cá. Perfil que não estiver na lista não vê o item.
+   Para levar um extra para dentro do cofre do perfil, use atualizar-menu.html
+   e apague a entrada daqui. */
+const EXTRAS = [
+  {
+    perfis: ['Administração', 'Lideranças'],
+    grupo: 'Processual',
+    item: {
+      id: 'processos-datajud',
+      nome: 'Processos [DataJud]',
+      url: 'https://borgesmacedoadvocacia.github.io/dashboard-processos-datajud/'
+    }
+  }
+];
+
+function aplicarExtras(menu) {
+  if (!menu || !Array.isArray(menu.grupos)) return menu;
+  const perfil = normUsuario(menu.perfil || '');
+  for (const ex of EXTRAS) {
+    if (!ex.perfis.some(p => normUsuario(p) === perfil)) continue;
+    let g = menu.grupos.find(x => normUsuario(x.nome) === normUsuario(ex.grupo));
+    if (!g) { g = { nome: ex.grupo, itens: [] }; menu.grupos.push(g); }
+    g.itens = g.itens || [];
+    if (g.itens.some(i => i.id === ex.item.id)) continue;   // já veio do cofre
+    g.itens.push(ex.item);
+  }
+  return menu;
+}
+
 function entrarNaCentral(menu, cred, guardar) {
-  MENU = menu;
+  MENU = aplicarExtras(menu);
+  menu = MENU;
   if (guardar) {
     try {
       sessionStorage.setItem(K_SESSAO, JSON.stringify(menu));
