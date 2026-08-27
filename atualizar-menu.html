@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Atualizar o menu da Central · BM Advocacia</title>
+<link rel="icon" type="image/png" href="favicon.png" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{ --primary:#C4A028; --primary-mid:#E8C96A; --green:#43a047; --danger:#ef5350;
+         --text-main:#eaeffa; --text-sub:#6b82a8; --border:#1a2f54; --bg:#060e1f; --card:#0c1a35; --card2:#07112a; }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--text-main);font-size:14px;line-height:1.55;padding:26px 18px 70px}
+  .wrap{max-width:860px;margin:0 auto}
+  h1{font-size:20px;font-weight:800;letter-spacing:-.3px;margin-bottom:4px}
+  .sub{color:var(--text-sub);font-size:13px;margin-bottom:20px}
+  .card{background:linear-gradient(135deg,var(--card),var(--card2));border:1px solid var(--border);
+        border-radius:13px;padding:17px 19px;margin-bottom:15px}
+  h2{font-size:13px;font-weight:700;margin-bottom:12px;letter-spacing:.2px}
+  label{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.7px;color:var(--text-sub);
+        font-weight:600;margin:11px 0 4px}
+  input,textarea,select{width:100%;background:var(--card2);border:1px solid var(--border);color:var(--text-main);
+        padding:9px 11px;border-radius:8px;font-size:13px;font-family:inherit;outline:none}
+  input:focus,textarea:focus,select:focus{border-color:var(--primary)}
+  textarea{font-family:ui-monospace,Consolas,monospace;font-size:11.5px;min-height:150px;resize:vertical}
+  .lin{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  button{margin-top:15px;background:linear-gradient(135deg,var(--primary),#a8871f);border:none;color:#0b1226;
+         padding:11px 20px;border-radius:9px;font-size:13.5px;font-weight:700;cursor:pointer;font-family:inherit}
+  button:hover{filter:brightness(1.1)} button:disabled{opacity:.5;cursor:not-allowed}
+  button.sec{background:var(--card2);border:1px solid var(--border);color:var(--text-main)}
+  .msg{margin-top:13px;padding:10px 13px;border-radius:9px;font-size:12.5px;display:none}
+  .msg.ok{display:block;background:rgba(67,160,71,.15);border:1px solid var(--green);color:#9fd8a2}
+  .msg.err{display:block;background:rgba(239,83,80,.15);border:1px solid var(--danger);color:#ffb3b1}
+  .st{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+  .pill{padding:5px 12px;border-radius:20px;font-size:11.5px;font-weight:600;border:1px solid var(--border);color:var(--text-sub)}
+  .pill.on{border-color:var(--green);color:#9fd8a2;background:rgba(67,160,71,.13)}
+  ol{margin:9px 0 0 19px;color:var(--text-sub);font-size:12.5px} ol li{margin-bottom:5px}
+  code{background:rgba(0,0,0,.4);padding:1px 6px;border-radius:4px;font-size:11.5px;color:var(--primary-mid)}
+  .prev{background:var(--card2);border:1px solid var(--border);border-radius:9px;padding:11px 13px;
+        font-size:12px;color:var(--text-sub);margin-top:11px;white-space:pre-wrap;
+        font-family:ui-monospace,Consolas,monospace;max-height:230px;overflow:auto;display:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Atualizar o menu da Central</h1>
+  <div class="sub">
+    Acrescenta um dashboard ao menu de cada perfil sem que a senha saia deste navegador:
+    o cofre é aberto aqui mesmo, o item é inserido e o cofre é refeito com a mesma credencial.
+  </div>
+
+  <div class="card">
+    <h2>1 · Dashboard a incluir</h2>
+    <div class="lin">
+      <div><label>Grupo do menu</label><input id="grupo" value="Processual"></div>
+      <div><label>Identificador (id)</label><input id="id" value="processos-datajud"></div>
+    </div>
+    <label>Nome no menu</label><input id="nome" value="Processos [DataJud]">
+    <label>URL</label><input id="url" value="https://borgesmacedoadvocacia.github.io/dashboard-processos-datajud/">
+    <label>Posição no grupo</label>
+    <select id="pos"><option value="fim">no fim do grupo</option><option value="inicio">no começo do grupo</option></select>
+  </div>
+
+  <div class="card">
+    <h2>2 · Abrir o cofre de um perfil</h2>
+    <div class="lin">
+      <div><label>Usuário</label><input id="usuario" placeholder="Admin / Lideranças / Equipe" autocomplete="off"></div>
+      <div><label>Senha</label><input id="senha" type="password" autocomplete="off"></div>
+    </div>
+    <button id="btn">Incluir e refazer o cofre deste perfil</button>
+    <button class="sec" id="btnPular" type="button">Este perfil não deve ver o painel</button>
+    <div class="msg" id="msg"></div>
+    <div class="prev" id="prev"></div>
+    <div class="st" id="status"></div>
+  </div>
+
+  <div class="card">
+    <h2>3 · Novo bloco <code>COFRES</code></h2>
+    <div style="color:var(--text-sub);font-size:12.5px">
+      Refaça os cofres dos perfis que devem ver o painel (o de um perfil não abre o do outro).
+      Quando terminar, copie o bloco abaixo e substitua o <code>const COFRES = [ … ];</code> do
+      <code>index.html</code> da Central.
+    </div>
+    <textarea id="saida" readonly placeholder="O bloco aparece aqui conforme os cofres forem refeitos…"></textarea>
+    <button class="sec" id="btnCopiar" type="button">Copiar</button>
+    <ol>
+      <li>Rode este arquivo pela Central publicada ou abrindo-o direto do disco.</li>
+      <li>Um perfil por vez: usuário + senha › <b>Incluir e refazer</b>.</li>
+      <li>Perfis que não devem ver o painel: <b>Este perfil não deve ver</b> (o cofre é mantido como está).</li>
+      <li>Cole o bloco final no <code>index.html</code> e publique.</li>
+    </ol>
+  </div>
+</div>
+
+<script>
+/* Cofres atuais da Central — mantenha em sincronia com o index.html */
+const COFRES = [
+  /* Administração */
+  {"v":1,"it":310000,"salt":"tpUDHQdmX6AQT/5tWLKmWQ==","iv":"bG/4/UHbFb2lkBP7","ct":"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"},
+  /* Lideranças — todos os painéis, inclusive os exclusivos */
+  {"v":1,"it":310000,"salt":"R+kkUDbbWShjrDKl9F3sOQ==","iv":"hpfuM4pO9VVn76/d","ct":"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"},
+  /* Equipe — Metas e Resultados do Comercial e do Processual + Dados do Kommo */
+  {"v":1,"it":310000,"salt":"5mFPrpdB7MszcAKOtSii4Q==","iv":"WK0+ONzdnvvF/8Js","ct":"aTOs6nkl5fxzQAgnm7blQ+qcRefEQMhiivb5ckfh7G8i0t5dXfr5LV1tk8TuSV20OJCJ5ur3ED2A1A49NZMSHz7uM5KJPh9jQ5etnpviVhRz02MNd9/gisyj6v20tXvjSsl+uTRtoiWHXJgIwxV2rc7yCfl42Dvz2ehOwp2g+QJXu0nDIJySDTO9c1V9nDBlV05CCiINhmFVAn1rTqe7NSpXbqXY6RH7yL36XkgRSUkBHGXAObkLvDurcS9XUYquX62MsgJcJGySGW9BHYoePLm+zeFjraOK0Sk2VmhgwNwr4xuD3d+z+cYDvgWyUkpcYm8pxaNpAT+P1d8TxF79JkvusAibZitPKr6+QkiG/vNx9RKCJZ9i0MW6LnZeb/bkNqnZGCvHarwxRzWLf1Hc2Dmd3rVcDrIh+zEZQ0MorRBFDerDp5JnLl8A4+gvQ6Jt7zHCzRoXSDuNKJ/yytsKsOwqcq2NU3PjAIB7m7C/PcQNmtnBWYeONkAlh5O8m/ZN+EcF6WhCgnKM3Ix0OcJ4At7/eYhThfU5n9F41gpXzKa9rH4zJmHzwzneyw08vx2+eyagH0y6z+b+WYzAUW5Ie1E1oomYDlxwqqDzVqUYgKj2KrXTqo6mMaEbH66AX7Ay+GDt"}
+];
+const ROTULOS = ['Administração', 'Lideranças', 'Equipe'];
+
+const $ = s => document.querySelector(s);
+const b64bytes = b64 => Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+const bytesb64 = buf => btoa(String.fromCharCode(...new Uint8Array(buf)));
+const normUsuario = u => u.trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+
+/* estado: para cada cofre, o novo bloco (ou null se ainda não mexido) */
+const NOVOS = COFRES.map(() => null);
+const FEITOS = COFRES.map(() => null);   // 'incluido' | 'mantido'
+
+async function derivar(usuario, senha, salt, it, uso) {
+  const material = await crypto.subtle.importKey(
+    'raw', new TextEncoder().encode(normUsuario(usuario) + '\n' + senha),
+    'PBKDF2', false, ['deriveKey']);
+  return crypto.subtle.deriveKey(
+    { name: 'PBKDF2', salt: b64bytes(salt), iterations: it, hash: 'SHA-256' },
+    material, { name: 'AES-GCM', length: 256 }, false, [uso]);
+}
+
+async function abrir(cofre, usuario, senha) {
+  const chave = await derivar(usuario, senha, cofre.salt, cofre.it, 'decrypt');
+  const claro = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: b64bytes(cofre.iv) },
+    chave, b64bytes(cofre.ct));
+  return JSON.parse(new TextDecoder().decode(claro));
+}
+
+async function fechar(menu, usuario, senha, it) {
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const iv   = crypto.getRandomValues(new Uint8Array(12));
+  const saltB = bytesb64(salt);
+  const chave = await derivar(usuario, senha, saltB, it, 'encrypt');
+  const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv },
+    chave, new TextEncoder().encode(JSON.stringify(menu)));
+  return { v: 1, it, salt: saltB, iv: bytesb64(iv), ct: bytesb64(ct) };
+}
+
+function aviso(tipo, texto) { const m = $('#msg'); m.className = 'msg ' + tipo; m.textContent = texto; }
+
+function pintarStatus() {
+  $('#status').innerHTML = COFRES.map((c, i) =>
+    '<span class="pill' + (FEITOS[i] ? ' on' : '') + '">' + ROTULOS[i] +
+    (FEITOS[i] === 'incluido' ? ' · cofre refeito' : FEITOS[i] === 'mantido' ? ' · mantido' : ' · pendente') +
+    '</span>').join('');
+  const prontos = FEITOS.filter(Boolean).length;
+  if (!prontos) { $('#saida').value = ''; return; }
+  $('#saida').value = 'const COFRES = [\n' + COFRES.map((c, i) =>
+    '  /* ' + ROTULOS[i] + ' */\n  ' + JSON.stringify(NOVOS[i] || c)).join(',\n') + '\n];';
+}
+
+function inserir(menu, grupoNome, item, pos) {
+  menu.grupos = menu.grupos || [];
+  let g = menu.grupos.find(x => x.nome.toLowerCase() === grupoNome.toLowerCase());
+  if (!g) { g = { nome: grupoNome, itens: [] }; menu.grupos.push(g); }
+  g.itens = (g.itens || []).filter(i => i.id !== item.id);
+  if (pos === 'inicio') g.itens.unshift(item); else g.itens.push(item);
+  return menu;
+}
+
+$('#btn').addEventListener('click', async () => {
+  const usuario = $('#usuario').value, senha = $('#senha').value;
+  if (!usuario || !senha) { aviso('err', 'Informe usuário e senha do perfil.'); return; }
+  const item = { id: $('#id').value.trim(), nome: $('#nome').value.trim(), url: $('#url').value.trim() };
+  if (!item.id || !item.nome || !item.url) { aviso('err', 'Preencha id, nome e URL do dashboard.'); return; }
+  $('#btn').disabled = true; aviso('ok', 'Abrindo o cofre…');
+  try {
+    let achou = -1, menu = null;
+    for (let i = 0; i < COFRES.length; i++) {
+      try { menu = await abrir(COFRES[i], usuario, senha); achou = i; break; } catch (e) {}
+    }
+    if (achou < 0) throw new Error('Nenhum cofre abriu com essa credencial. Confira usuário e senha.');
+    inserir(menu, $('#grupo').value.trim() || 'Processual', item, $('#pos').value);
+    NOVOS[achou] = await fechar(menu, usuario, senha, COFRES[achou].it);
+    FEITOS[achou] = 'incluido';
+    $('#prev').style.display = 'block';
+    $('#prev').textContent = 'Perfil: ' + (menu.perfil || ROTULOS[achou]) + '\n\n' +
+      menu.grupos.map(g => g.nome + '\n' + g.itens.map(i =>
+        '   · ' + i.nome + (i.id === item.id ? '   ← incluído' : '')).join('\n')).join('\n\n');
+    aviso('ok', 'Cofre de "' + (menu.perfil || ROTULOS[achou]) + '" refeito com o item incluído.');
+    $('#senha').value = ''; $('#usuario').value = '';
+    pintarStatus();
+  } catch (e) { aviso('err', e.message); }
+  $('#btn').disabled = false;
+});
+
+$('#btnPular').addEventListener('click', async () => {
+  const usuario = $('#usuario').value, senha = $('#senha').value;
+  if (!usuario || !senha) { aviso('err', 'Informe usuário e senha para identificar qual perfil manter como está.'); return; }
+  for (let i = 0; i < COFRES.length; i++) {
+    try { await abrir(COFRES[i], usuario, senha); FEITOS[i] = 'mantido'; NOVOS[i] = null;
+          aviso('ok', 'Perfil ' + ROTULOS[i] + ' mantido sem o novo painel.');
+          $('#senha').value = ''; $('#usuario').value = ''; pintarStatus(); return; } catch (e) {}
+  }
+  aviso('err', 'Nenhum cofre abriu com essa credencial.');
+});
+
+$('#btnCopiar').addEventListener('click', () => {
+  $('#saida').select(); document.execCommand('copy');
+  aviso('ok', 'Bloco copiado. Substitua o const COFRES = [ … ]; do index.html.');
+});
+
+pintarStatus();
+</script>
+</body>
+</html>
