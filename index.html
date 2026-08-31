@@ -303,6 +303,18 @@ const K_ATIVO  = 'bm_portal_ativo';
 
 let MENU = null;
 const frames = {};   // id -> iframe (mantidos vivos para a troca ser instantânea)
+
+/* O GitHub Pages serve os painéis com Cache-Control: max-age=600. Sem isso,
+   quem abriu a central antes de uma publicação continua vendo a versão velha
+   por até dez minutos — e não tem como saber disso. O parâmetro muda a cada
+   abertura da central, então cada sessão começa com a versão publicada; ao
+   trocar de painel dentro da mesma sessão, o cache continua valendo. */
+const SELO_SESSAO = String(Date.now());
+function comVersao(url, agora) {
+  const u = new URL(url);
+  u.searchParams.set('v', agora ? String(Date.now()) : SELO_SESSAO);
+  return u.toString();
+}
 let ativo = null;
 
 /* ---------- cofre ---------- */
@@ -382,7 +394,7 @@ function abrirDashboard(id) {
     fr.title = item.nome;
     fr.allow = 'fullscreen';
     fr.addEventListener('load', () => { if (ativo === id) esconderCarregando(); });
-    fr.src = item.url;
+    fr.src = comVersao(item.url);
     frames[id] = fr;
     document.getElementById('palco').appendChild(fr);
   } else {
@@ -505,8 +517,9 @@ document.getElementById('btnAtualizar').addEventListener('click', () => {
   if (!ativo || !frames[ativo]) return;
   const item = acharItem(ativo);
   mostrarCarregando(item);
-  try { frames[ativo].contentWindow.location.reload(); }
-  catch (e) { frames[ativo].src = item.url; }
+  /* Recarrega furando o cache: reload() do iframe reaproveitaria a cópia
+     que o navegador já tem, e o botão "Atualizar" não traria versão nova. */
+  frames[ativo].src = comVersao(item.url, true);
 });
 
 /* drawer mobile */
