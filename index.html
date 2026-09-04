@@ -309,10 +309,15 @@ const frames = {};   // id -> iframe (mantidos vivos para a troca ser instantân
    por até dez minutos — e não tem como saber disso. O parâmetro muda a cada
    abertura da central, então cada sessão começa com a versão publicada; ao
    trocar de painel dentro da mesma sessão, o cache continua valendo. */
-const SELO_SESSAO = String(Date.now());
-function comVersao(url, agora) {
+/* O selo é gerado no momento em que o painel é aberto pela primeira vez
+   nesta sessão — não na abertura da central. A diferença importa: um selo
+   fixo por sessão prende quem deixa a central aberta à versão que existia
+   quando ela foi carregada, e essa cópia fica valendo indefinidamente.
+   Como os iframes são mantidos vivos, trocar de painel continua instantâneo;
+   só a primeira abertura de cada um busca a versão publicada. */
+function comVersao(url) {
   const u = new URL(url);
-  u.searchParams.set('v', agora ? String(Date.now()) : SELO_SESSAO);
+  u.searchParams.set('v', String(Date.now()));
   return u.toString();
 }
 let ativo = null;
