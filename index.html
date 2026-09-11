@@ -466,8 +466,15 @@ const EXTRAS = [
   }
 ];
 
+/* ---------- painéis retirados do menu ----------
+   O cofre de cada perfil ainda os lista (regerar cofre exige a senha de cada
+   perfil); o portal simplesmente não os mostra. Grupo que ficar vazio some. */
+const OCULTOS = ['ceo'];   // Ambiente do CEO — retirado a pedido em 11/09/2026
+
 function aplicarExtras(menu) {
   if (!menu || !Array.isArray(menu.grupos)) return menu;
+  for (const g of menu.grupos) g.itens = (g.itens || []).filter(i => !OCULTOS.includes(i.id));
+  menu.grupos = menu.grupos.filter(g => g.itens.length);
   const perfil = normUsuario(menu.perfil || '');
   for (const ex of EXTRAS) {
     if (!ex.perfis.some(p => normUsuario(p) === perfil)) continue;
