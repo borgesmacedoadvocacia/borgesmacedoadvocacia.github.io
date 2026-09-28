@@ -613,10 +613,7 @@ footer .err{color:var(--muted)}
       ${tile('t-money', 'Honorários de êxito', hon, 'r', '', falta())}
       ${receberTile()}
       ${tile('t-half', 'Ações distribuídas', aco, 'n', '', falta())}
-      <div class="tile t-half" title="Sentenças [TOTAL] + Recursos de Mérito [TOTAL]">
-        <div class="label">Sentenças e recursos</div>
-        <div class="value${E ? '' : ' none'}">${E ? fmt(E.total, 'n') : 'sem dado'}</div>
-        <div class="foot">${E ? `<div class="metatxt"><span>${fmt(E.sent, 'n')} sentenças + ${fmt(E.rec, 'n')} recursos de mérito</span></div>` : `<span class="missing">${esc(eFalta)}</span>`}</div></div>
+      ${tile('t-half', 'Sentenças e recursos', pk('sentencas'), 'n', '', falta())}
       ${ring('Taxa de êxito', E ? { res: E.taxa, nome: 'procedências ÷ sentenças e recursos' } : null,
         E ? `${fmt(E.proc, 'n')} favoráveis de ${fmt(E.total, 'n')} · ${fmt(E.sentProc, 'n')} procedências + ${fmt(E.recPos, 'n')} recursos providos` : '', eFalta)}
       ${ring('Cumprimento de diligências', D ? { res: D.res, nome: D.nome } : null,
