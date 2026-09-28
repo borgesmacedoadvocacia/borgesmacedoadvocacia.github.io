@@ -451,8 +451,14 @@ footer .err{color:var(--muted)}
     const eAtual = sel.mes === hoje.getMonth() && sel.ano === hoje.getFullYear();
     $('prev').disabled = sel.ano * 12 + sel.mes <= PRIMEIRO_MES.ano * 12 + PRIMEIRO_MES.mes;
     $('next').disabled = eAtual;
-    const d = (dados.proc && dados.proc.dias) || (dados.kpis && dados.kpis.dias);
-    $('dias').textContent = d && d.cont != null && d.total != null ? `dia útil ${nf.format(d.cont)} de ${nf.format(d.total)}` : '';
+    // Cada planilha conta os dias do seu jeito: o Comercial usa dias corridos,
+    // o Processual usa "dias contabilizados". A meta proporcional de cada lado segue a sua conta.
+    const dc = dados.kpis && dados.kpis.dias, dp = dados.proc && dados.proc.dias;
+    const ok = d => d && d.cont != null && d.total != null;
+    $('dias').textContent = [
+      ok(dc) ? `Comercial: dia ${nf.format(dc.cont)} de ${nf.format(dc.total)}` : '',
+      ok(dp) ? `Processual: dia útil ${nf.format(dp.cont)} de ${nf.format(dp.total)}` : '',
+    ].filter(Boolean).join(' · ');
 
     // ----- Comercial -----
     const K = dados.kpis ? dados.kpis.linhas : {}, F = dados.funil;
