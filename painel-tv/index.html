@@ -214,6 +214,17 @@ footer .err{color:var(--muted)}
     {"v":1,"it":310000,"salt":"cUaU+z2Kr1MGx6Q0yVSMTA==","iv":"i4Dyx0lqmZQDunjC","ct":"z6L5yWgHQDTeDl6DQ1MV+YaGfc3jRZOhxqf1IfuF0WpURLWXkiaLRL2SJAWJgerOdU2ffPV9OgNKlJQcZqnqHVj1Q24CW45MHKtn+k2R4AuQFh8XXm1GTu1Wcq51Z2Q2rqsCKYcxiyIgIBOcSw8eaaNow3uFxt6hT2vTUkHHOeACBNOvBm0="}
   ];
 
+  /* "Alvarás a receber" vem da planilha de Execuções de Sentença e Acordos,
+     aba Alvarás, com a mesma regra do dashboard-execucoes. Cofre copiado de lá:
+     só Administração e Lideranças abrem (o perfil Equipe não tem cofre). */
+  const EXEC = { SHEET_ID: null, GOOGLE_API_KEY: null, semAcesso: false };
+  const COFRES_EXEC = [
+    /* Administração */
+    {"v":1,"it":310000,"salt":"vbJNRDJ/PgVZrSdjAa5bLw==","iv":"+ERs3g2bGax2J9jJ","ct":"SzkfZKOWKw76hbKngYM0k3pfCcugkImUZhVTNeZK5FvUsqXHSsinsAUnNTXU3X8Ui0R1qJcvHlVNxEcEzUshh4bVtsc8UpjfRVJk/VfquT8nNkAcAm7j4iZK0zvTXSVgM/okd5SSHmAZ8mGSyeA+2QSSaakfWqt2q0F0AVH0en24LtDUnv8="},
+    /* Lideranças */
+    {"v":1,"it":310000,"salt":"II0T1E56f6mrMNUORrxtjg==","iv":"+3pWV6XhMFfVVHKT","ct":"rCDlRWDGJKhJS5Bw5OkZhuZACJtJNxcMLybvDMltQNeLJJjxO4g48vxxr8bXmDdBacx4Bckc8IOifyzjNvq6CLBO9offS29srwpoXkisjWzOdnF3wiH1tyvvRjB9fxDnKch14fBCk+NBLYMS1SGHrsxa00R4S5S0GSL7+tD6c8fRVbSHjWg="}
+  ];
+
   const $ = id => document.getElementById(id);
   const b64bytes = b64 => Uint8Array.from(atob(b64), c => c.charCodeAt(0));
   const normUsuario = u => u.trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
@@ -229,8 +240,8 @@ footer .err{color:var(--muted)}
     const claro = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: b64bytes(cofre.iv) }, chave, b64bytes(cofre.ct));
     return JSON.parse(new TextDecoder().decode(claro));
   }
-  async function abrirCofre(u, s) {
-    for (const cofre of COFRES) { try { return await abrirUmCofre(cofre, u, s); } catch (e) {} }
+  async function abrirCofre(u, s, lista = COFRES) {
+    for (const cofre of lista) { try { return await abrirUmCofre(cofre, u, s); } catch (e) {} }
     throw new Error('sem acesso');
   }
   function credDaSessao() {
@@ -375,6 +386,39 @@ footer .err{color:var(--muted)}
     return { linhas, dias };
   }
 
+  // Valor em R$ como o dashboard-execucoes lê: aceita "1.234,56" e "1,234.56"; texto vira 0
+  function valorBR(v) {
+    let t = String(v == null ? '' : v).replace(/ /g, ' ').trim().replace(/R\$/gi, '').replace(/\s/g, '');
+    if (!t || t === '-') return 0;
+    const neg = t.startsWith('-') || /^\(.*\)$/.test(t);
+    t = t.replace(/[()+]/g, '').replace(/^-/, '');
+    const vg = t.lastIndexOf(','), pt = t.lastIndexOf('.');
+    if (vg > pt) t = t.replace(/\./g, '').replace(',', '.'); else if (pt > vg) t = t.replace(/,/g, '');
+    const n = parseFloat(t);
+    return isFinite(n) && /^[\d.]+$/.test(t) ? (neg ? -n : n) : 0;
+  }
+  /* Aba Alvarás (API v4: a aba tem linhas ocultas, que o gviz não devolve).
+     A receber = soma de "Valor a Receber" das linhas cuja "Situação Alvará" não é "Recebido". */
+  async function lerAlvarasReceber() {
+    const url = `https://sheets.googleapis.com/v4/spreadsheets/${EXEC.SHEET_ID}/values/${encodeURIComponent("'Alvarás'!A1:AA1000")}` +
+      `?valueRenderOption=FORMATTED_VALUE&key=${EXEC.GOOGLE_API_KEY}&_=${Date.now()}`;
+    const r = await fetch(url, { cache: 'no-store' });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const g = (await r.json()).values || [];
+    if (!g.length) throw new Error('aba Alvarás vazia');
+    const cab = g[0].map(h => String(h).trim());
+    const iValor = cab.indexOf('Valor a Receber');
+    let iSit = cab.indexOf('Situação Alvará'); if (iSit < 0) iSit = 6;
+    if (iValor < 0) throw new Error('coluna "Valor a Receber" não encontrada');
+    let pend = 0, qtdPend = 0, receb = 0, qtdReceb = 0;
+    g.slice(1).forEach(l => {
+      const v = valorBR(l[iValor]);
+      if (String(l[iSit] || '').trim().toLowerCase() === 'recebido') { receb += v; qtdReceb++; }
+      else { pend += v; qtdPend++; }
+    });
+    return { res: pend, qtdPend, receb, qtdReceb, nome: 'Execuções › aba Alvarás' };
+  }
+
   /* Cada KPI do Processual é a linha da planilha cujo nome casa com a regra.
      A primeira regra que achar linha vence. */
   const REGRAS_PROC = {
@@ -398,8 +442,8 @@ footer .err{color:var(--muted)}
   // ---------- estado ----------
   const hoje = new Date();
   let sel = { mes: hoje.getMonth(), ano: hoje.getFullYear() };
-  const dados = { kpis: null, funil: null, proc: null };
-  const erros = { kpis: null, funil: null, proc: null };
+  const dados = { kpis: null, funil: null, proc: null, exec: null };
+  const erros = { kpis: null, funil: null, proc: null, exec: null };
   let ultimaCarga = null;
 
   const nf = new Intl.NumberFormat('pt-BR');
@@ -445,7 +489,19 @@ footer .err{color:var(--muted)}
         ${sub ? `<div class="metatxt">${sub}</div>` : ''}
         ${v == null && falta ? `<span class="missing">${esc(falta)}</span>` : metaBloco(k, '%')}</div></div>`;
   }
-  const semFonte = (e, nome) => e ? `${nome}: ${e.message}` : null;
+  // Alvarás a receber: saldo pendente de hoje, com a mesma leitura do dashboard de Execuções
+  function receberTile() {
+    const e = dados.exec, v = e ? e.res : null;
+    const brl = n => 'R$ ' + n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const foot = e
+      ? `<div class="metatxt"><span>${e.qtdPend === 1 ? '1 pendente' : nf.format(e.qtdPend) + ' pendentes'} · ${brl(e.receb)} já recebidos (${nf.format(e.qtdReceb)})</span></div>`
+      : `<span class="missing">${esc(erros.exec ? 'Execuções: ' + erros.exec.message : 'Carregando…')}</span>`;
+    return `<div class="tile t-money" title="Planilha de Execuções de Sentença e Acordos, aba Alvarás">
+      <div class="label">Alvarás a receber <span class="scope">posição atual</span></div>
+      <div class="value${v == null ? ' none' : ''}">${v == null ? 'sem dado' : '<span class="unit">R$</span>' + fmt(v, 'r')}</div>
+      <div class="foot">${foot}</div></div>`;
+  }
+  const semFonte =(e, nome) => e ? `${nome}: ${e.message}` : null;
 
   function render() {
     $('monthName').firstChild.nodeValue = MESES[sel.mes] + ' de ' + sel.ano;
@@ -496,18 +552,18 @@ footer .err{color:var(--muted)}
     const sent = pk('sentencas'), proc = pk('procedentes');
     let exito = pk('exito');
     if (!exito && proc && sent && sent.res > 0) exito = { res: proc.res / sent.res * 100, nome: `${proc.nome} ÷ ${sent.nome}` };
-    const alv = pk('alvaras'), hon = pk('honorarios'), rec = pk('receber'), aco = pk('acoes'), dil = pk('diligencia');
+    const alv = pk('alvaras'), hon = pk('honorarios'), aco = pk('acoes'), dil = pk('diligencia');
     $('gridP').innerHTML = `
       ${tile('t-money', 'Alvarás creditados + acordos', alv, 'r', '', falta())}
       ${tile('t-money', 'Honorários de êxito', hon, 'r', '', falta())}
-      ${tile('t-money', 'Alvarás a receber', rec, 'r', '', falta())}
+      ${receberTile()}
       ${tile('t-half', 'Ações distribuídas', aco, 'n', '', falta())}
       ${tile('t-half', 'Sentenças e recursos', sent, 'n', '', falta())}
       ${ring('Taxa de êxito', exito, proc && sent ? `${fmt(proc.res, 'n')} procedentes de ${fmt(sent.res, 'n')}` : '', falta())}
       ${ring('Cumprimento de diligências', dil, '', falta())}`;
 
     const fonte = (nome, e, d) => `<span class="${e ? 'err' : d ? 'ok' : ''}">${nome}${e ? ': ' + esc(e.message) : ''}</span>`;
-    $('fontes').innerHTML = fonte('KPIs do Comercial', erros.kpis, dados.kpis) + fonte('Funil Rev. Saúde', erros.funil, dados.funil) + fonte('Metas e Resultados - Processual', erros.proc, dados.proc);
+    $('fontes').innerHTML = fonte('KPIs do Comercial', erros.kpis, dados.kpis) + fonte('Funil Rev. Saúde', erros.funil, dados.funil) + fonte('Metas e Resultados - Processual', erros.proc, dados.proc) + fonte('Execuções (Alvarás)', erros.exec, dados.exec);
     // Diagnóstico: abrir o painel com #linhas lista os nomes das linhas do Processual
     if (location.hash === '#linhas' && P) $('fontes').innerHTML += '<span>Linhas do Processual: ' + P.map(l => esc(l.nome)).join(' · ') + '</span>';
     $('updated').textContent = ultimaCarga ? 'Atualizado às ' + ultimaCarga.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) + ' · atualiza sozinho a cada ' + AUTO_REFRESH_MIN + ' min' : '';
@@ -518,9 +574,10 @@ footer .err{color:var(--muted)}
     if (carregando) return; carregando = true;
     $('refresh').classList.add('girando');
     const m = { ...sel };
-    const [a, b, c] = await Promise.allSettled([lerKpisComercial(m), lerFunil(m), lerProcessual(m)]);
+    const [a, b, c, x] = await Promise.allSettled([lerKpisComercial(m), lerFunil(m), lerProcessual(m),
+      EXEC.semAcesso ? Promise.reject(new Error('visível só para Administração e Lideranças')) : lerAlvarasReceber()]);
     if (m.mes === sel.mes && m.ano === sel.ano) {
-      [['kpis', a], ['funil', b], ['proc', c]].forEach(([k, r]) => {
+      [['kpis', a], ['funil', b], ['proc', c], ['exec', x]].forEach(([k, r]) => {
         dados[k] = r.status === 'fulfilled' ? r.value : null;
         erros[k] = r.status === 'rejected' ? r.reason : null;
       });
@@ -574,6 +631,11 @@ footer .err{color:var(--muted)}
     const segredo = await abrirCofre(cred.u, cred.s);
     PROC.SHEET_ID = segredo.SHEET_ID;
     PROC.GOOGLE_API_KEY = segredo.GOOGLE_API_KEY;
+    try {
+      const ex = await abrirCofre(cred.u, cred.s, COFRES_EXEC);
+      EXEC.SHEET_ID = ex.SHEET_ID;
+      EXEC.GOOGLE_API_KEY = ex.GOOGLE_API_KEY || segredo.GOOGLE_API_KEY;
+    } catch (e) { EXEC.semAcesso = true; }
     $('login').hidden = true;
     render(); carregar();
   }
