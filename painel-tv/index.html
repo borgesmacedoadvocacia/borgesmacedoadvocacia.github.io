@@ -91,7 +91,7 @@ section.area{display:grid;grid-template-rows:auto 1fr;gap:clamp(10px,.8vw,16px);
 .funnel{display:grid;grid-template-columns:auto 1fr;gap:.25em 1.1em;align-content:center}
 .funnel > .label{grid-column:1 / -1;margin-bottom:.3em}
 .f-name{font-size:1.05em;color:var(--muted);align-self:center;white-space:nowrap;display:flex;flex-direction:column;gap:.1em}
-.f-name .f-meta{font-size:.78em}
+.f-sub{font-size:.8em;color:var(--muted);font-variant-numeric:tabular-nums}
 .f-row{display:flex;align-items:center;gap:.8em;min-width:0}
 .f-bar{height:2.3em;border-radius:6px;background:var(--accent);min-width:4px;flex:none}
 .f-num{font-family:var(--display);font-size:2.4em;font-weight:700;font-variant-numeric:tabular-nums;line-height:1}
@@ -585,7 +585,14 @@ footer .err{color:var(--muted)}
     const top = Math.max(leads && leads.res || 0, diag && diag.res || 0, reun && reun.res || 0, 1);
     // A barra reserva só o espaço do número; a meta fica embaixo do nome da etapa
     const w = x => `width:calc((100% - 4.5em) * ${(x || 0) / top})`;
-    const fRow = (nome, k) => `<div class="f-name">${nome}${k && k.meta != null ? `<span class="f-meta">meta ${fmt(k.meta, 'n')}${k.metaProp != null ? ` · proporcional ${fmt(k.metaProp, 'n')}` : ''}</span>` : ''}</div>
+    // Mesmo texto de meta dos quadros: meta do mês, meta proporcional em destaque e % colorido
+    const fMeta = k => {
+      if (!k || k.meta == null) return '';
+      const pct = pctDe(k), cor = faixa(pct);
+      return `<span class="f-sub ${cor}">Meta do mês ${fmt(k.meta, 'n')}${k.metaProp != null ? ` · Meta proporcional <strong class="mp">${fmt(k.metaProp, 'n')}</strong>` : ''}</span>` +
+        (pct != null ? `<span class="f-sub ${cor}"><span class="pct">${nf.format(Math.round(pct))}% da meta proporcional</span></span>` : '');
+    };
+    const fRow = (nome, k) => `<div class="f-name">${nome}${fMeta(k)}</div>
         <div class="f-row"><div class="f-bar" style="${w(k && k.res)}"></div><span class="f-num">${fmt(k ? k.res : null, 'n')}</span></div>`;
     const chip = (txt, v, meta) => `<div class="f-conv"><span>↓ ${txt}</span><span class="chip">${fmt(v, '%')}</span>${meta && meta.meta != null ? `<span class="f-meta">meta ${fmt(meta.meta, '%')}</span>` : ''}</div>`;
     $('gridC').innerHTML = `
