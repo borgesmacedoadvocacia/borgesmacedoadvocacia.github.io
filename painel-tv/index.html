@@ -91,6 +91,7 @@ section.area{display:grid;grid-template-rows:auto 1fr;gap:clamp(10px,.8vw,16px);
 .funnel{display:grid;grid-template-columns:auto 1fr;gap:.25em 1.1em;align-content:center}
 .funnel > .label{grid-column:1 / -1;margin-bottom:.3em}
 .f-name{font-size:1.05em;color:var(--muted);align-self:center;white-space:nowrap;display:flex;flex-direction:column;gap:.1em}
+.f-etapa{font-weight:700;color:var(--text)}
 .f-sub{font-size:.8em;color:var(--muted);font-variant-numeric:tabular-nums}
 .f-row{display:flex;align-items:center;gap:.8em;min-width:0}
 .f-meta-bar{flex:1;height:.7em}
@@ -599,7 +600,7 @@ footer .err{color:var(--muted)}
       return `<span class="f-sub ${cor}">Meta do mês ${fmt(k.meta, 'n')}${k.metaProp != null ? ` · Meta proporcional <strong class="mp">${fmt(k.metaProp, 'n')}</strong>` : ''}</span>` +
         (pct != null ? `<span class="f-sub ${cor}"><span class="pct">${nf.format(Math.round(pct))}% da meta proporcional</span></span>` : '');
     };
-    const fRow = (nome, k) => `<div class="f-name">${nome}${fMeta(k)}</div>
+    const fRow = (nome, k) => `<div class="f-name"><strong class="f-etapa">${nome}</strong>${fMeta(k)}</div>
         <div class="f-row">${fBar(k)}<span class="f-num">${fmt(k ? k.res : null, 'n')}</span></div>`;
     const chip = (txt, v, meta) => `<div class="f-conv"><span>↓ ${txt}</span><span class="chip">${fmt(v, '%')}</span>${meta && meta.meta != null ? `<span class="f-meta">meta ${fmt(meta.meta, '%')}</span>` : ''}</div>`;
     $('gridC').innerHTML = `
