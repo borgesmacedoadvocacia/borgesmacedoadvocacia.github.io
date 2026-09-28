@@ -395,17 +395,82 @@ function abrirDashboard(id) {
 
   if (!frames[id]) {
     mostrarCarregando(item);
-    const fr = document.createElement('iframe');
-    fr.title = item.nome;
-    fr.allow = 'fullscreen';
-    fr.addEventListener('load', () => { if (ativo === id) esconderCarregando(); });
-    fr.src = comVersao(item.url);
+    const fr = criarFrame(id, item);
+    fr.addEventListener('load', () => { if (ativo === id) esconderCarregando(); }, { once: true });
     frames[id] = fr;
     document.getElementById('palco').appendChild(fr);
   } else {
     esconderCarregando();
+    // Painel que ficou escondido além do intervalo volta atualizado ao ser aberto
+    if (vencido(id)) recarregarEmSilencio(id);
   }
 }
+
+/* ---------- atualização automática ----------
+   A cada 5 minutos o painel aberto é recarregado com a versão publicada e os
+   dados do momento. Três cuidados:
+   - sem piscar: o painel novo carrega escondido por trás do atual e só troca
+     de lugar alguns segundos depois de pronto (tempo de buscar as planilhas);
+   - sem atrapalhar: se alguém mexeu no painel no último minuto (clique,
+     tecla, rolagem), a atualização espera;
+   - painéis escondidos não gastam nada: são atualizados quando forem abertos.
+   Painéis que já se atualizam sozinhos por dentro ficam de fora, para não
+   perder o modo tela cheia. */
+const AUTO_MIN = 5;
+const SE_ATUALIZAM_SOZINHOS = ['painel-tv'];
+let ultimaInteracao = 0;
+const marcarInteracao = () => { ultimaInteracao = Date.now(); };
+['pointerdown', 'keydown', 'wheel', 'touchstart'].forEach(ev =>
+  document.addEventListener(ev, marcarInteracao, { passive: true, capture: true }));
+
+function criarFrame(id, item) {
+  const fr = document.createElement('iframe');
+  fr.title = item.nome;
+  fr.allow = 'fullscreen';
+  fr.addEventListener('load', () => {
+    fr.dataset.carregado = String(Date.now());
+    // Mesma origem (github.io): dá para saber quando alguém mexe dentro do painel.
+    // Painel de outro endereço (Kommo) não deixa; aí vale só o que acontece na Central.
+    try {
+      ['pointerdown', 'keydown', 'wheel', 'touchstart', 'input'].forEach(ev =>
+        fr.contentWindow.addEventListener(ev, marcarInteracao, { passive: true, capture: true }));
+    } catch (e) {}
+  });
+  fr.src = comVersao(item.url);
+  return fr;
+}
+
+function vencido(id) {
+  const fr = frames[id];
+  if (!fr || SE_ATUALIZAM_SOZINHOS.includes(id) || fr.dataset.trocando) return false;
+  return Date.now() - Number(fr.dataset.carregado || Date.now()) >= AUTO_MIN * 60 * 1000;
+}
+
+function recarregarEmSilencio(id) {
+  const antigo = frames[id], item = acharItem(id);
+  if (!antigo || !item || antigo.dataset.trocando) return;
+  antigo.dataset.trocando = '1';
+  const novo = criarFrame(id, item);
+  novo.style.cssText = 'display:block;visibility:hidden;pointer-events:none';
+  novo.addEventListener('load', () => {
+    setTimeout(() => {
+      if (!antigo.isConnected) return;
+      antigo.remove();
+      novo.style.cssText = '';
+      novo.style.display = ativo === id ? 'block' : 'none';
+      frames[id] = novo;
+    }, 6000);
+  }, { once: true });
+  // Falhou (sem internet): desiste desta vez e mantém o painel atual
+  setTimeout(() => { if (frames[id] === antigo && novo.isConnected && !novo.dataset.carregado) { novo.remove(); delete antigo.dataset.trocando; } }, 60000);
+  antigo.parentNode.insertBefore(novo, antigo);
+}
+
+setInterval(() => {
+  if (!ativo || document.hidden) return;
+  if (Date.now() - ultimaInteracao < 60 * 1000) return;
+  if (vencido(ativo)) recarregarEmSilencio(ativo);
+}, 30 * 1000);
 
 function mostrarCarregando(item) {
   const el = document.getElementById('carregando');
@@ -585,6 +650,8 @@ document.getElementById('btnAtualizar').addEventListener('click', () => {
   mostrarCarregando(item);
   /* Recarrega furando o cache: reload() do iframe reaproveitaria a cópia
      que o navegador já tem, e o botão "Atualizar" não traria versão nova. */
+  delete frames[ativo].dataset.trocando;
+  frames[ativo].addEventListener('load', () => esconderCarregando(), { once: true });
   frames[ativo].src = comVersao(item.url, true);
 });
 
