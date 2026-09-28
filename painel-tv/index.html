@@ -225,6 +225,17 @@ footer .err{color:var(--muted)}
     {"v":1,"it":310000,"salt":"II0T1E56f6mrMNUORrxtjg==","iv":"+3pWV6XhMFfVVHKT","ct":"rCDlRWDGJKhJS5Bw5OkZhuZACJtJNxcMLybvDMltQNeLJJjxO4g48vxxr8bXmDdBacx4Bckc8IOifyzjNvq6CLBO9offS29srwpoXkisjWzOdnF3wiH1tyvvRjB9fxDnKch14fBCk+NBLYMS1SGHrsxa00R4S5S0GSL7+tD6c8fRVbSHjWg="}
   ];
 
+  /* "Cumprimento de diligências" vem da planilha de Diligências, com a regra do
+     dashboard-diligencias (cumpridas ÷ total, sem as "Standy By"). Cofre copiado
+     de lá: só Administração e Lideranças abrem. */
+  const DIL = { SHEET_ID: null, GOOGLE_API_KEY: null, semAcesso: false };
+  const COFRES_DIL = [
+    /* Administração */
+    {"v":1,"it":310000,"salt":"SAQD0nNEk+lIoPNEHDs/8g==","iv":"nj9MQq4J/L5PYVWK","ct":"jKmzpQA11pFdgNLwa6Lv63bK3GgKTbgUJiFuUaVBvTft29XWxmjpDpQhD+691ys1BQIItPWfrQYiwj8f1knA2x2zUGokvAXeQ0SbY6NaEL2WnR7B+VEfmyQrqS+5NqFN2ksQY3KtkS09hSysgzvt8Im1jW6hgXo1PdK3dRd1JsP2NfaYPFc="},
+    /* Lideranças */
+    {"v":1,"it":310000,"salt":"nACw99//Tg6tj/pKwOpJoQ==","iv":"fHC9br19FRAUgff5","ct":"WPUhLQFoNA5MfmQJdt0HNtigC8wUlKyBlGbWeA7I4bFAXPWg4Qcj5f0xIlLRcZ1LjGrM8oBJOkOeHtTDFUHHAKCSzlHm/AqXP1Bzgrq1PmbG7Hfq86lJAl7hvFlYji0FIaOZNqR8NJ6bSo/sqFTQfP7TfVMhUgyNyY991PdD25agF6ENGbY="}
+  ];
+
   const $ = id => document.getElementById(id);
   const b64bytes = b64 => Uint8Array.from(atob(b64), c => c.charCodeAt(0));
   const normUsuario = u => u.trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
@@ -419,6 +430,33 @@ footer .err{color:var(--muted)}
     return { res: pend, qtdPend, receb, qtdReceb, nome: 'Execuções › aba Alvarás' };
   }
 
+  /* Aba "TODAS AS DILIGÊNCIAS": mesma leitura do dashboard-diligencias.
+     Linha vale se tem PROCESSO (D) ou data de lançamento (B); STATUS em J. */
+  async function lerDiligencias() {
+    const url = `https://sheets.googleapis.com/v4/spreadsheets/${DIL.SHEET_ID}/values/${encodeURIComponent("'TODAS AS DILIGÊNCIAS'!A1:S600")}` +
+      `?valueRenderOption=FORMATTED_VALUE&key=${DIL.GOOGLE_API_KEY}&_=${Date.now()}`;
+    const r = await fetch(url, { cache: 'no-store' });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const g = (await r.json()).values || [];
+    if (!g.length) throw new Error('aba vazia');
+    const cab = g[0].map(h => String(h).trim());
+    const col = (nome, pos) => { const i = cab.indexOf(nome); return i >= 0 ? i : pos; };
+    const iSt = col('STATUS', 9), iProc = col('PROCESSO', 3), iLanc = col('DATA DO LANÇAMENTO DA DILIGÊNCIA', 1);
+    const assinatura = cab.filter(Boolean).slice(0, 3).join('|');
+    const cel = (l, i) => String(l[i] == null ? '' : l[i]).trim();
+    let total = 0, cumpridas = 0, standby = 0;
+    g.slice(1).forEach(l => {
+      if (!l.some(c => String(c).trim())) return;
+      if (l.map(c => String(c).trim()).filter(Boolean).slice(0, 3).join('|') === assinatura) return;
+      if (!cel(l, iProc) && !/\d{1,2}\/\d{1,2}\/\d{2,4}/.test(cel(l, iLanc))) return;
+      const st = norm(cel(l, iSt));
+      if (st.startsWith('stand')) { standby++; return; }
+      total++;
+      if (st.startsWith('cumprid')) cumpridas++;
+    });
+    return { res: total ? cumpridas / total * 100 : null, cumpridas, total, standby, nome: 'Diligências › TODAS AS DILIGÊNCIAS' };
+  }
+
   /* Cada KPI do Processual é a linha da planilha cujo nome casa com a regra.
      A primeira regra que achar linha vence. */
   const REGRAS_PROC = {
@@ -442,8 +480,8 @@ footer .err{color:var(--muted)}
   // ---------- estado ----------
   const hoje = new Date();
   let sel = { mes: hoje.getMonth(), ano: hoje.getFullYear() };
-  const dados = { kpis: null, funil: null, proc: null, exec: null };
-  const erros = { kpis: null, funil: null, proc: null, exec: null };
+  const dados = { kpis: null, funil: null, proc: null, exec: null, dil: null };
+  const erros = { kpis: null, funil: null, proc: null, exec: null, dil: null };
   let ultimaCarga = null;
 
   const nf = new Intl.NumberFormat('pt-BR');
@@ -552,7 +590,7 @@ footer .err{color:var(--muted)}
     const sent = pk('sentencas'), proc = pk('procedentes');
     let exito = pk('exito');
     if (!exito && proc && sent && sent.res > 0) exito = { res: proc.res / sent.res * 100, nome: `${proc.nome} ÷ ${sent.nome}` };
-    const alv = pk('alvaras'), hon = pk('honorarios'), aco = pk('acoes'), dil = pk('diligencia');
+    const alv = pk('alvaras'), hon = pk('honorarios'), aco = pk('acoes'), D = dados.dil;
     $('gridP').innerHTML = `
       ${tile('t-money', 'Alvarás creditados + acordos', alv, 'r', '', falta())}
       ${tile('t-money', 'Honorários de êxito', hon, 'r', '', falta())}
@@ -560,10 +598,12 @@ footer .err{color:var(--muted)}
       ${tile('t-half', 'Ações distribuídas', aco, 'n', '', falta())}
       ${tile('t-half', 'Sentenças e recursos', sent, 'n', '', falta())}
       ${ring('Taxa de êxito', exito, proc && sent ? `${fmt(proc.res, 'n')} procedentes de ${fmt(sent.res, 'n')}` : '', falta())}
-      ${ring('Cumprimento de diligências', dil, '', falta())}`;
+      ${ring('Cumprimento de diligências', D ? { res: D.res, nome: D.nome } : null,
+        D ? `${nf.format(D.cumpridas)} cumpridas de ${nf.format(D.total)} · ${nf.format(D.standby)} em Standy By fora da conta · posição atual` : '',
+        erros.dil ? 'Diligências: ' + erros.dil.message : 'Carregando…')}`;
 
     const fonte = (nome, e, d) => `<span class="${e ? 'err' : d ? 'ok' : ''}">${nome}${e ? ': ' + esc(e.message) : ''}</span>`;
-    $('fontes').innerHTML = fonte('KPIs do Comercial', erros.kpis, dados.kpis) + fonte('Funil Rev. Saúde', erros.funil, dados.funil) + fonte('Metas e Resultados - Processual', erros.proc, dados.proc) + fonte('Execuções (Alvarás)', erros.exec, dados.exec);
+    $('fontes').innerHTML = fonte('KPIs do Comercial', erros.kpis, dados.kpis) + fonte('Funil Rev. Saúde', erros.funil, dados.funil) + fonte('Metas e Resultados - Processual', erros.proc, dados.proc) + fonte('Execuções (Alvarás)', erros.exec, dados.exec) + fonte('Diligências', erros.dil, dados.dil);
     // Diagnóstico: abrir o painel com #linhas lista os nomes das linhas do Processual
     if (location.hash === '#linhas' && P) $('fontes').innerHTML += '<span>Linhas do Processual: ' + P.map(l => esc(l.nome)).join(' · ') + '</span>';
     $('updated').textContent = ultimaCarga ? 'Atualizado às ' + ultimaCarga.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) + ' · atualiza sozinho a cada ' + AUTO_REFRESH_MIN + ' min' : '';
@@ -574,10 +614,11 @@ footer .err{color:var(--muted)}
     if (carregando) return; carregando = true;
     $('refresh').classList.add('girando');
     const m = { ...sel };
-    const [a, b, c, x] = await Promise.allSettled([lerKpisComercial(m), lerFunil(m), lerProcessual(m),
-      EXEC.semAcesso ? Promise.reject(new Error('visível só para Administração e Lideranças')) : lerAlvarasReceber()]);
+    const [a, b, c, x, y] = await Promise.allSettled([lerKpisComercial(m), lerFunil(m), lerProcessual(m),
+      EXEC.semAcesso ? Promise.reject(new Error('visível só para Administração e Lideranças')) : lerAlvarasReceber(),
+      DIL.semAcesso ? Promise.reject(new Error('visível só para Administração e Lideranças')) : lerDiligencias()]);
     if (m.mes === sel.mes && m.ano === sel.ano) {
-      [['kpis', a], ['funil', b], ['proc', c], ['exec', x]].forEach(([k, r]) => {
+      [['kpis', a], ['funil', b], ['proc', c], ['exec', x], ['dil', y]].forEach(([k, r]) => {
         dados[k] = r.status === 'fulfilled' ? r.value : null;
         erros[k] = r.status === 'rejected' ? r.reason : null;
       });
@@ -636,6 +677,11 @@ footer .err{color:var(--muted)}
       EXEC.SHEET_ID = ex.SHEET_ID;
       EXEC.GOOGLE_API_KEY = ex.GOOGLE_API_KEY || segredo.GOOGLE_API_KEY;
     } catch (e) { EXEC.semAcesso = true; }
+    try {
+      const dl = await abrirCofre(cred.u, cred.s, COFRES_DIL);
+      DIL.SHEET_ID = dl.SHEET_ID;
+      DIL.GOOGLE_API_KEY = dl.GOOGLE_API_KEY || segredo.GOOGLE_API_KEY;
+    } catch (e) { DIL.semAcesso = true; }
     $('login').hidden = true;
     render(); carregar();
   }
