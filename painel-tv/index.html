@@ -93,7 +93,8 @@ section.area{display:grid;grid-template-rows:auto 1fr;gap:clamp(10px,.8vw,16px);
 .f-name{font-size:1.05em;color:var(--muted);align-self:center;white-space:nowrap;display:flex;flex-direction:column;gap:.1em}
 .f-sub{font-size:.8em;color:var(--muted);font-variant-numeric:tabular-nums}
 .f-row{display:flex;align-items:center;gap:.8em;min-width:0}
-.f-bar{height:2.3em;border-radius:6px;background:var(--accent);min-width:4px;flex:none}
+.f-meta-bar{flex:1;height:.7em}
+.f-num{min-width:2.6em;text-align:right}
 .f-num{font-family:var(--display);font-size:2.4em;font-weight:700;font-variant-numeric:tabular-nums;line-height:1}
 .f-meta{color:var(--faint);font-size:.85em;white-space:nowrap}
 .f-conv{grid-column:2;display:flex;align-items:center;gap:.6em;color:var(--muted);font-size:.92em;flex-wrap:wrap}
@@ -582,9 +583,15 @@ footer .err{color:var(--muted)}
     const txLR = leads && reun && leads.res > 0 && reun.res != null ? reun.res / leads.res * 100 : null;
     const txRC = reun && cliF && reun.res > 0 && cliF.res != null ? cliF.res / reun.res * 100 : null;
     const metaLR = kl('tx. de conversao (leads x reunioes)'), metaRC = kl('tx. de conversao (reuniao x clientes)');
-    const top = Math.max(leads && leads.res || 0, diag && diag.res || 0, reun && reun.res || 0, 1);
-    // A barra reserva só o espaço do número; a meta fica embaixo do nome da etapa
-    const w = x => `width:calc((100% - 4.5em) * ${(x || 0) / top})`;
+    // Barra de meta igual à dos quadros: a trilha inteira é a meta do mês, o traço
+    // marca a meta proporcional e a cor segue o % da meta proporcional
+    const fBar = k => {
+      if (!k || k.res == null || !(k.meta > 0)) return '<div class="bar f-meta-bar"></div>';
+      const cor = faixa(pctDe(k));
+      const larg = Math.min(k.res / k.meta * 100, 100);
+      const tick = k.metaProp != null ? Math.min(k.metaProp / k.meta * 100, 100) : null;
+      return `<div class="bar f-meta-bar ${cor}"><i style="width:${larg}%"></i>${tick != null ? `<b style="left:${tick}%"></b>` : ''}</div>`;
+    };
     // Mesmo texto de meta dos quadros: meta do mês, meta proporcional em destaque e % colorido
     const fMeta = k => {
       if (!k || k.meta == null) return '';
@@ -593,7 +600,7 @@ footer .err{color:var(--muted)}
         (pct != null ? `<span class="f-sub ${cor}"><span class="pct">${nf.format(Math.round(pct))}% da meta proporcional</span></span>` : '');
     };
     const fRow = (nome, k) => `<div class="f-name">${nome}${fMeta(k)}</div>
-        <div class="f-row"><div class="f-bar" style="${w(k && k.res)}"></div><span class="f-num">${fmt(k ? k.res : null, 'n')}</span></div>`;
+        <div class="f-row">${fBar(k)}<span class="f-num">${fmt(k ? k.res : null, 'n')}</span></div>`;
     const chip = (txt, v, meta) => `<div class="f-conv"><span>↓ ${txt}</span><span class="chip">${fmt(v, '%')}</span>${meta && meta.meta != null ? `<span class="f-meta">meta ${fmt(meta.meta, '%')}</span>` : ''}</div>`;
     $('gridC').innerHTML = `
       <div class="tile funnel"><div class="label">Funil do mês <span class="scope">Revisional de Plano de Saúde</span></div>
