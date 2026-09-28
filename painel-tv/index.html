@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<script>
+/* Central BM — mesmo guarda dos demais painéis: só ajusta a moldura. Quem
+   protege os dados é o cofre abaixo; sem a sessão da central, o painel mostra
+   o próprio login (útil para a TV, que abre este endereço direto). */
+(function () {
+  if (location.protocol === 'file:' ||
+      location.hostname === 'localhost' || location.hostname === '127.0.0.1') return;
+  if (window.self !== window.top) document.documentElement.setAttribute('data-portal', '1');
+})();
+</script>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Painel da TV | Borges Macedo</title>
+<link rel="icon" type="image/png" href="favicon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&display=swap">
+<style>
+:root{
+  color-scheme: dark;
+  --bg:#0D131E; --surface:#151D2B; --surface-2:#1E2839; --line:#27324A;
+  --text:#EEF1F6; --muted:#8E99AE; --faint:#5C6780;
+  --com:#F2B84B; --com-soft:rgba(242,184,75,.16);
+  --pro:#4FC3B5; --pro-soft:rgba(79,195,181,.16);
+  --verde:#5BD18B; --amarelo:#F5B544; --vermelho:#FF7A6B;
+  --display:"Barlow Condensed","Arial Narrow",Arial,sans-serif;
+  --body:"Barlow","Segoe UI",Arial,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--text);font-family:var(--body);font-size:clamp(14px,.95vw,24px)}
+button,input{font:inherit;color:inherit}
+button{cursor:pointer}
+button:focus-visible,input:focus-visible{outline:2px solid var(--com);outline-offset:2px}
+[hidden]{display:none!important}
+
+.app{min-height:100%;padding-inline:clamp(16px,1.6vw,40px);padding-block:clamp(12px,1.2vw,28px);display:grid;grid-template-rows:auto 1fr auto;gap:clamp(12px,1.1vw,24px)}
+
+header{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:.8em}
+.brand img{height:3em;width:auto}
+.brand b{font-family:var(--display);font-weight:700;font-size:1.8em;letter-spacing:.03em;text-transform:uppercase;display:block;line-height:1}
+.brand span{color:var(--muted);font-size:.95em}
+.month{display:flex;align-items:center;gap:.4em}
+.month h1{margin:0;font-family:var(--display);font-weight:600;font-size:2.2em;min-width:7.5em;text-align:center}
+.month small{display:block;text-align:center;color:var(--muted);font-size:.85em;font-family:var(--body);font-weight:400}
+.navbtn{background:var(--surface);border:1px solid var(--line);border-radius:8px;width:2em;height:2em;display:grid;place-items:center;font-size:1.2em}
+.navbtn:disabled{opacity:.3;cursor:default}
+.right{display:flex;align-items:center;gap:.9em}
+.right time{font-family:var(--display);font-size:2.2em;font-weight:600;font-variant-numeric:tabular-nums}
+.tools{display:flex;gap:.5em}
+.tool{background:transparent;border:1px solid var(--line);border-radius:8px;padding:.45em .8em;color:var(--muted);font-size:.9em}
+.tool:hover{color:var(--text);border-color:var(--muted)}
+.tool.girando{opacity:.5}
+body.tv .tools,body.tv .navbtn{opacity:0;transition:opacity .3s}
+body.tv header:hover .tools,body.tv header:hover .navbtn{opacity:1}
+
+main{display:grid;grid-template-columns:1fr 1fr;gap:clamp(12px,1.1vw,24px);min-height:0}
+section.area{display:grid;grid-template-rows:auto 1fr;gap:clamp(10px,.8vw,16px);min-height:0}
+.area-head{display:flex;align-items:baseline;gap:.7em;padding-bottom:.45em;border-bottom:2px solid var(--accent)}
+.area-head h2{margin:0;font-family:var(--display);font-weight:700;font-size:1.7em;text-transform:uppercase;letter-spacing:.08em;color:var(--accent)}
+.area-head small{color:var(--muted);font-size:.9em}
+.com{--accent:var(--com);--soft:var(--com-soft)}
+.pro{--accent:var(--pro);--soft:var(--pro-soft)}
+.grid{display:grid;gap:clamp(10px,.8vw,16px);min-height:0}
+.com .grid{grid-template-columns:repeat(2,1fr);grid-template-rows:1.5fr 1fr}
+.com .funnel{grid-column:1 / -1}
+.pro .grid{grid-template-columns:repeat(6,1fr);grid-template-rows:1fr 1fr 1fr}
+.pro .t-money{grid-column:span 2}
+.pro .t-half{grid-column:span 3}
+
+.tile{background:var(--surface);border-radius:12px;padding:clamp(12px,.95vw,22px);display:flex;flex-direction:column;gap:.35em;min-width:0}
+.label{color:var(--muted);font-size:1em;font-weight:500;text-transform:uppercase;letter-spacing:.06em;line-height:1.2}
+.scope{color:var(--faint);font-size:.78em;text-transform:none;letter-spacing:0;font-weight:400}
+.value{font-family:var(--display);font-weight:700;font-size:3.5em;line-height:1;font-variant-numeric:tabular-nums}
+.value .unit{font-size:.45em;font-weight:600;color:var(--muted);margin-right:.2em;vertical-align:.55em}
+.value.none{color:var(--faint);font-size:2.2em}
+.foot{margin-top:auto;display:flex;flex-direction:column;gap:.4em}
+.bar{height:.45em;border-radius:99px;background:var(--surface-2);position:relative}
+.bar i{display:block;height:100%;border-radius:99px;background:var(--c,var(--accent))}
+.bar b{position:absolute;top:-.25em;bottom:-.25em;width:2px;background:var(--text);opacity:.55}
+.metatxt{font-size:.85em;color:var(--muted);display:flex;justify-content:space-between;gap:1em;font-variant-numeric:tabular-nums;flex-wrap:wrap}
+.pct{font-weight:600;color:var(--c,var(--muted))}
+.missing{font-size:.8em;color:var(--faint)}
+.verde{--c:var(--verde)} .amarelo{--c:var(--amarelo)} .vermelho{--c:var(--vermelho)}
+
+/* Funil */
+.funnel{display:grid;grid-template-columns:auto 1fr;gap:.25em 1.1em;align-content:center}
+.funnel > .label{grid-column:1 / -1;margin-bottom:.3em}
+.f-name{font-size:1.05em;color:var(--muted);align-self:center;white-space:nowrap}
+.f-row{display:flex;align-items:center;gap:.8em;min-width:0}
+.f-bar{height:2.3em;border-radius:6px;background:var(--accent);min-width:4px;flex:none}
+.f-num{font-family:var(--display);font-size:2.4em;font-weight:700;font-variant-numeric:tabular-nums;line-height:1}
+.f-meta{color:var(--faint);font-size:.85em;white-space:nowrap}
+.f-conv{grid-column:2;display:flex;align-items:center;gap:.6em;color:var(--muted);font-size:.92em;flex-wrap:wrap}
+.chip{background:var(--soft);color:var(--accent);font-weight:600;border-radius:99px;padding:.12em .7em;font-variant-numeric:tabular-nums;font-size:1.05em}
+
+/* Anel */
+.t-ring{flex-direction:row;align-items:center;gap:1em}
+.ring{width:6em;height:6em;flex:none}
+.ring circle{fill:none;stroke-width:10}
+.ring .track{stroke:var(--surface-2)}
+.ring .arc{stroke:var(--c,var(--accent));stroke-linecap:round;transform:rotate(-90deg);transform-origin:50% 50%}
+.ring text{fill:var(--text);font-family:var(--display);font-weight:700;font-size:26px;text-anchor:middle;dominant-baseline:central}
+.ring-info{display:flex;flex-direction:column;gap:.35em;min-width:0;flex:1}
+
+footer{display:flex;justify-content:space-between;gap:.5em 1.5em;flex-wrap:wrap;color:var(--faint);font-size:.82em}
+footer .src{display:flex;gap:1.2em;flex-wrap:wrap}
+footer .ok::before{content:"● ";color:var(--verde)}
+footer .err::before{content:"● ";color:var(--vermelho)}
+footer .err{color:var(--muted)}
+
+/* Login */
+.login{position:fixed;inset:0;display:grid;place-items:center;padding:16px;background:var(--bg);z-index:5}
+.login form{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:28px;width:min(380px,100%);display:flex;flex-direction:column;gap:12px;font-size:16px}
+.login h2{margin:0;font-family:var(--display);font-size:28px}
+.login p{margin:0 0 6px;color:var(--muted)}
+.login label{font-size:14px;color:var(--muted)}
+.login input{background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px;width:100%}
+.login button{background:var(--com);border:0;border-radius:8px;padding:11px;color:#1A1406;font-weight:600}
+.login .erro{color:var(--vermelho);min-height:1.2em;font-size:14px}
+
+@media (max-width:1100px){
+  main{grid-template-columns:1fr}
+  body{font-size:14px}
+  .value{font-size:2.6em}
+}
+@media (max-width:620px){
+  .com .grid{grid-template-columns:1fr 1fr}
+  .pro .grid{grid-template-columns:1fr 1fr}
+  .pro .t-money,.pro .t-half{grid-column:span 1}
+  .pro .t-ring{flex-direction:column;align-items:flex-start}
+  .month h1{min-width:0;font-size:1.6em}
+}
+</style>
+</head>
+<body>
+<div class="login" id="login" hidden>
+  <form id="loginForm" autocomplete="on">
+    <h2>Painel da TV</h2>
+    <p>Entre com o mesmo usuário e senha da Central de Dashboards.</p>
+    <label for="lg-u">Usuário</label><input id="lg-u" autocomplete="username" required>
+    <label for="lg-s">Senha</label><input id="lg-s" type="password" autocomplete="current-password" required>
+    <div class="erro" id="lg-erro"></div>
+    <button type="submit" id="lg-btn">Entrar</button>
+  </form>
+</div>
+
+<div class="app">
+  <header>
+    <div class="brand"><img src="logo.png" alt="Borges Macedo Advocacia" onerror="this.hidden=true;this.nextElementSibling.hidden=false"><div hidden><b>Borges Macedo</b><span>Advocacia</span></div></div>
+    <div class="month">
+      <button class="navbtn" id="prev" aria-label="Mês anterior">‹</button>
+      <h1 id="monthName">—<small id="dias"></small></h1>
+      <button class="navbtn" id="next" aria-label="Próximo mês">›</button>
+    </div>
+    <div class="right">
+      <div class="tools">
+        <button class="tool" id="refresh">Atualizar</button>
+        <button class="tool" id="tvBtn">Modo TV</button>
+      </div>
+      <time id="clock">--:--</time>
+    </div>
+  </header>
+
+  <main>
+    <section class="area com">
+      <div class="area-head"><h2>Comercial</h2><small>do lead ao contrato</small></div>
+      <div class="grid" id="gridC"></div>
+    </section>
+    <section class="area pro">
+      <div class="area-head"><h2>Processual</h2><small>da distribuição ao alvará</small></div>
+      <div class="grid" id="gridP"></div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="src" id="fontes"></div>
+    <span id="updated"></span>
+  </footer>
+</div>
+
+<script>
+(() => {
+  const AUTO_REFRESH_MIN = 5;
+  const PRIMEIRO_MES = { mes: 2, ano: 2026 };   // Março/2026: primeira aba das planilhas mensais
+  const MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+
+  /* Fontes — as mesmas planilhas dos painéis existentes:
+     - "KPIs do Comercial" (painel KPIs do Comercial): Clientes, Faturamento e metas das taxas.
+     - "Metas e Resultados - Comercial" (funil Rev. Saúde): Leads, Diagnósticos, Atendimentos.
+     - "Metas e Resultados - Processual" (painel dashboard-processual): todo o Processual.
+       O ID e a chave dessa planilha ficam no cofre, copiado do dashboard-processual. */
+  const KPIS_COM_ID = '1x6G-5tsHeEPqN850awNObJM9cpqTdui8j0RVEygJviQ';
+  const FUNIL_ID    = '1o1UY_NwKlq07c2wFrkQXecK8Cs5jsHtuRzDFIWQGkSM';
+  const PROC = { SHEET_ID: null, GOOGLE_API_KEY: null, ABA_PREFIXO: 'Resultados Gerais - ' };
+
+  const COFRES = [
+    /* Administração */
+    {
+      v: 1,
+      it: 310000,
+      salt: 'jj9pyUqJdZOdJUrna4f4Qg==',
+      iv: 'sjgShUmSQ9pljvW0',
+      ct: 'IqVAfUt0M48XHs0OqfzGZPAm6ddIKe3rtFjD0zKrJZ0mwnr3D3Vk+swnrqwgfrSihxkYGPsUH3e4Ql7WRVav4r8EcXzcXraCGbK87GAd2FjP4L6Z0KpdI+ucVTb/KolSkOpoka/bbbBxg9v6LhA8sg4+l7FjeBToTvGOEF3417cxdOcj4bY='
+    },
+    /* Lideranças */
+    {"v":1,"it":310000,"salt":"mEyBwN74imBaMeKr3kcCbw==","iv":"zcC70FdU5Z803UGH","ct":"ww7/uYuggTkL6r/+g4bZjQbDMic1Pc/s5WUkXktYRDGlK7x7cJZHJxNjUeB5GODxYxNe8uCrw6PCbEk0yd+BYkXjydyKLPKQ9iAq8I3hudDXeQPi7DNNdivNRBktC5g9czbDt/6uGNbpkXBchwQRN98zaH+4JPPqcSDdU13dcBWtXW8fLOU="},
+    /* Equipe */
+    {"v":1,"it":310000,"salt":"cUaU+z2Kr1MGx6Q0yVSMTA==","iv":"i4Dyx0lqmZQDunjC","ct":"z6L5yWgHQDTeDl6DQ1MV+YaGfc3jRZOhxqf1IfuF0WpURLWXkiaLRL2SJAWJgerOdU2ffPV9OgNKlJQcZqnqHVj1Q24CW45MHKtn+k2R4AuQFh8XXm1GTu1Wcq51Z2Q2rqsCKYcxiyIgIBOcSw8eaaNow3uFxt6hT2vTUkHHOeACBNOvBm0="}
+  ];
+
+  const $ = id => document.getElementById(id);
+  const b64bytes = b64 => Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+  const normUsuario = u => u.trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  const norm = s => String(s == null ? '' : s).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+  async function abrirUmCofre(cofre, usuario, senha) {
+    const enc = new TextEncoder();
+    const material = await crypto.subtle.importKey('raw', enc.encode(normUsuario(usuario) + '\n' + senha), 'PBKDF2', false, ['deriveKey']);
+    const chave = await crypto.subtle.deriveKey(
+      { name: 'PBKDF2', salt: b64bytes(cofre.salt), iterations: cofre.it, hash: 'SHA-256' },
+      material, { name: 'AES-GCM', length: 256 }, false, ['decrypt']);
+    const claro = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: b64bytes(cofre.iv) }, chave, b64bytes(cofre.ct));
+    return JSON.parse(new TextDecoder().decode(claro));
+  }
+  async function abrirCofre(u, s) {
+    for (const cofre of COFRES) { try { return await abrirUmCofre(cofre, u, s); } catch (e) {} }
+    throw new Error('sem acesso');
+  }
+  function credDaSessao() {
+    try { const c = JSON.parse(sessionStorage.getItem('bm_portal_cred') || 'null'); return c && c.u != null && c.s != null ? c : null; }
+    catch (e) { return null; }
+  }
+
+  // ---------- leitura e números ----------
+  function parseCSV(text) {
+    const rows = []; let row = [], cur = '', inQ = false;
+    for (let i = 0; i < text.length; i++) {
+      const c = text[i];
+      if (inQ) { if (c === '"') { if (text[i + 1] === '"') { cur += '"'; i++; } else inQ = false; } else cur += c; }
+      else if (c === '"') inQ = true;
+      else if (c === ',') { row.push(cur); cur = ''; }
+      else if (c === '\n') { row.push(cur); rows.push(row); row = []; cur = ''; }
+      else if (c !== '\r') cur += c;
+    }
+    if (cur !== '' || row.length) { row.push(cur); rows.push(row); }
+    return rows;
+  }
+  // "R$ 1.234,56" -> 1234.56 ; "83,7%" -> 83.7 ; vazio/#DIV/0! -> null
+  function num(s) {
+    if (s == null) return null;
+    let t = String(s).trim();
+    if (!t || t === '-' || t[0] === '#') return null;
+    t = t.replace(/R\$\s*/g, '').replace(/%/g, '').replace(/\s/g, '').replace(/\./g, '').replace(',', '.');
+    const n = parseFloat(t);
+    return isFinite(n) ? n : null;
+  }
+  const isPct = s => /%/.test(String(s || ''));
+  async function getCSV(url) {
+    const r = await fetch(url + (url.includes('?') ? '&' : '?') + '_=' + Date.now(), { cache: 'no-store' });
+    if (!r.ok) throw new Error(r.status === 401 || r.status === 403 ? 'planilha privada' : 'HTTP ' + r.status);
+    const t = await r.text();
+    if (/^\s*</.test(t)) throw new Error('planilha privada');
+    return parseCSV(t);
+  }
+  const gviz = (id, aba, tq) => `https://docs.google.com/spreadsheets/d/${id}/gviz/tq?tqx=out:csv&headers=0&sheet=${encodeURIComponent(aba)}` + (tq ? '&tq=' + encodeURIComponent(tq) : '');
+  const aa = m => String(m.ano % 100).padStart(2, '0');
+
+  // KPIs do Comercial: B indicador, C meta, D meta proporcional, E resultado, F %, I/J dias
+  async function lerKpisComercial(m) {
+    const g = await getCSV(gviz(KPIS_COM_ID, `Comercial - ${MESES[m.mes]}/${aa(m)}`, 'SELECT B,C,D,E,F,G,I,J'));
+    const out = { linhas: {}, dias: null };
+    let temIndicador = false;
+    g.forEach(r => {
+      const k = norm(r[0]);
+      if (k === 'indicador') temIndicador = true;
+      if (/computad/.test(norm(r[6]))) out.dias = { cont: num(r[7]) };
+      if (/totais/.test(norm(r[6]))) (out.dias = out.dias || {}).total = num(r[7]);
+      if (k) out.linhas[k] = { meta: num(r[1]), metaProp: num(r[2]), res: num(r[3]), pct: num(r[4]), pctTxt: isPct(r[1]) };
+    });
+    if (!temIndicador) throw new Error('aba do mês não encontrada');
+    return out;
+  }
+
+  // Funil Rev. Saúde: cabeçalho na linha 1, linhas "Resultado Real", "Projeção Mensal", "Projeção Proporcional"
+  async function lerFunil(m) {
+    const mes = `${MESES[m.mes]}/${aa(m)}`;
+    let ultimoErro = null;
+    for (const aba of [`Rev. Saúde [${mes}]`, `Produtos Jurídicos [${mes}]`]) {
+      try {
+        const g = await getCSV(`https://docs.google.com/spreadsheets/d/${FUNIL_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(aba)}`);
+        const cab = (g[0] || []).map(c => String(c).trim());
+        if (!cab.includes('Responderam a Triagem') || !cab.includes('Clientes')) { ultimoErro = new Error('aba do mês não encontrada'); continue; }
+        const linhas = {};
+        g.slice(1).forEach(r => { const k = norm(r[0]); if (k) linhas[k] = r; });
+        const col = nomes => { for (const n of nomes) { const i = cab.indexOf(n); if (i >= 0) return i; } return -1; };
+        const val = (linha, nomes) => { const i = col(nomes), l = linhas[linha]; return i < 0 || !l ? null : num(l[i]); };
+        const pega = nomes => ({ res: val('resultado real', nomes), meta: val('projecao mensal', nomes), metaProp: val('projecao proporcional', nomes) });
+        return {
+          leads: pega(['Leads (Kommo)', 'Leads abordados ou que falaram no Whatsapp']),
+          diagnosticos: pega(['Diagnósticos']),
+          reunioes: pega(['Atendimentos Realizados']),
+          clientes: pega(['Clientes']),
+        };
+      } catch (e) { ultimoErro = e; if (e.message === 'planilha privada') break; }
+    }
+    throw ultimoErro || new Error('sem dados');
+  }
+
+  // Metas e Resultados - Processual (mesma leitura do dashboard-processual)
+  const REGRAS_CAB = [
+    ['pct', /^RESULTADO X META|^%|PERCENTUAL/], ['resultado', /^RESULTADO/],
+    ['metaProp', /^META PROPORCIONAL/], ['metaMes', /^META (MENSAL|DO MES)/],
+  ];
+  const chaveCab = t => String(t || '').replace(/\s+/g, ' ').trim().toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  function colunasProc(g) {
+    for (let r = 0; r < Math.min(g.length, 6); r++) {
+      const cols = g[r] || [];
+      if (chaveCab(cols[0] && cols[0].v) !== 'METRICA') continue;
+      const mapa = { resultado: null, pct: null, metaMes: null, metaProp: null };
+      for (let c = 1; c < cols.length; c++) {
+        const nome = chaveCab(cols[c] && cols[c].v);
+        for (const [campo, re] of REGRAS_CAB) if (nome && mapa[campo] === null && re.test(nome)) { mapa[campo] = c; break; }
+      }
+      if (mapa.resultado != null) return mapa;
+    }
+    return null;
+  }
+  const COR_REF = { verde: [183, 225, 205], amarelo: [255, 242, 204], vermelho: [244, 204, 204] };
+  function corCelula(bg) {
+    if (!bg) return null;
+    const r = (bg.red || 0) * 255, g = (bg.green || 0) * 255, b = (bg.blue || 0) * 255;
+    if (r > 235 && g > 235 && b > 235) return null;
+    let melhor = null, menor = Infinity;
+    for (const [nome, [rr, gg, bb]] of Object.entries(COR_REF)) { const d = (r-rr)**2 + (g-gg)**2 + (b-bb)**2; if (d < menor) { menor = d; melhor = nome; } }
+    return melhor;
+  }
+  async function lerProcessual(m) {
+    const aba = PROC.ABA_PREFIXO + MESES[m.mes] + '/' + m.ano;
+    let g;
+    try {
+      const url = `https://sheets.googleapis.com/v4/spreadsheets/${PROC.SHEET_ID}?ranges=${encodeURIComponent(aba + '!A1:I100')}` +
+        `&includeGridData=true&fields=sheets(data(rowData(values(formattedValue,effectiveFormat(backgroundColor)))))&key=${PROC.GOOGLE_API_KEY}&_=${Date.now()}`;
+      const r = await fetch(url, { cache: 'no-store' });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      const rows = (await r.json())?.sheets?.[0]?.data?.[0]?.rowData;
+      if (!rows) throw new Error('aba do mês não encontrada');
+      g = rows.map(x => (x.values || []).map(v => ({ v: v.formattedValue || '', bg: v.effectiveFormat?.backgroundColor || null })));
+    } catch (e) {
+      g = (await getCSV(`https://docs.google.com/spreadsheets/d/${PROC.SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(aba)}`)).map(r => r.map(v => ({ v, bg: null })));
+    }
+    if (chaveCab(g[0] && g[0][0] && g[0][0].v) !== 'METRICA') throw new Error('aba do mês não encontrada');
+    const L = colunasProc(g) || { resultado: 3, pct: 4, metaMes: 1, metaProp: 2 };
+    const linhas = [], dias = {};
+    g.forEach(cols => {
+      const txt = i => i == null ? '' : ((cols[i] && cols[i].v) || '').trim();
+      for (let c = 0; c < cols.length - 1; c++) {
+        if (/^dias no m(ê|e)s$/i.test(txt(c))) dias.total = num(txt(c + 1));
+        if (/^dias contabilizados$/i.test(txt(c))) dias.cont = num(txt(c + 1));
+      }
+      const nome = txt(0);
+      if (!nome || /^m(é|e)trica$/i.test(nome)) return;
+      const res = num(txt(L.resultado)), meta = num(txt(L.metaMes)), metaProp = num(txt(L.metaProp)), pct = num(txt(L.pct));
+      if (res == null && meta == null && metaProp == null && pct == null) return;
+      const raw = [txt(L.resultado), txt(L.metaMes), txt(L.metaProp)].join(' ');
+      linhas.push({ nome, k: norm(nome), res, meta, metaProp, pct, cor: corCelula(cols[L.pct] && cols[L.pct].bg),
+        money: /R\$/.test(raw), taxa: /%/.test(txt(L.resultado)) });
+    });
+    return { linhas, dias };
+  }
+
+  /* Cada KPI do Processual é a linha da planilha cujo nome casa com a regra.
+     A primeira regra que achar linha vence. */
+  const REGRAS_PROC = {
+    alvaras:     [/alvar.*\+.*acord/, /alvaras? creditad/],
+    honorarios:  [/honorar.*exito/],
+    acoes:       [/aco(es|oes)? distribuid/, /distribuid/, /distribuic/],
+    diligencia:  [/(taxa|tx|%).*dilig/, /cumpriment.*dilig/, /dilig.*cumprid/],
+    sentencas:   [/senten.*recurs/, /^sentenc/],
+    exito:       [/^(taxa|tx\.?|%)\s*(de\s*)?exito/, /^exito/, /procedenc.*%|% .*procedenc/],
+    receber:     [/alvar.*a receber/, /a receber/],
+    procedentes: [/^procedenc/],
+  };
+  function acharProc(linhas, chave) {
+    for (const re of REGRAS_PROC[chave]) {
+      const l = linhas.find(x => re.test(x.k) && !(chave === 'exito' && /honorar/.test(x.k)));
+      if (l) return l;
+    }
+    return null;
+  }
+
+  // ---------- estado ----------
+  const hoje = new Date();
+  let sel = { mes: hoje.getMonth(), ano: hoje.getFullYear() };
+  const dados = { kpis: null, funil: null, proc: null };
+  const erros = { kpis: null, funil: null, proc: null };
+  let ultimaCarga = null;
+
+  const nf = new Intl.NumberFormat('pt-BR');
+  const nf1 = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 1 });
+  const cf = new Intl.NumberFormat('pt-BR', { notation: 'compact', maximumFractionDigits: 1 });
+  const fmt = (v, t) => v == null ? '—' : t === 'r' ? (Math.abs(v) >= 10000 ? cf.format(v) : nf.format(Math.round(v))) : t === '%' ? nf1.format(v) + '%' : nf.format(Math.round(v));
+  const fmtMeta = (v, t) => v == null ? '' : (t === 'r' ? 'R$ ' : '') + fmt(v, t);
+  const faixa = pct => pct == null ? '' : pct >= 100 ? 'verde' : pct >= 70 ? 'amarelo' : 'vermelho';
+
+  /* k = {res, meta, metaProp, pct?, cor?}. O % é sempre contra a meta
+     proporcional ao dia, como nos painéis de origem. */
+  function pctDe(k) {
+    if (!k) return null;
+    if (k.pct != null) return k.pct;
+    if (k.res != null && k.metaProp > 0) return k.res / k.metaProp * 100;
+    return null;
+  }
+  function metaBloco(k, t) {
+    if (!k || k.meta == null) return '';
+    const pct = pctDe(k), cor = k.cor || faixa(pct);
+    const larg = k.res != null && k.meta > 0 ? Math.min(k.res / k.meta * 100, 100) : 0;
+    const tick = k.metaProp != null && k.meta > 0 ? Math.min(k.metaProp / k.meta * 100, 100) : null;
+    return `<div class="bar ${cor}"><i style="width:${larg}%"></i>${tick != null ? `<b style="left:${tick}%"></b>` : ''}</div>
+      <div class="metatxt ${cor}"><span>Meta do mês ${fmtMeta(k.meta, t)}</span>${pct != null ? `<span class="pct">${nf.format(Math.round(pct))}% da meta até hoje</span>` : ''}</div>`;
+  }
+  function tile(cls, label, k, t, scope, falta) {
+    const v = k ? k.res : null;
+    const unit = t === 'r' && v != null ? '<span class="unit">R$</span>' : '';
+    return `<div class="tile ${cls}"${k && k.nome ? ` title="Linha da planilha: ${esc(k.nome)}"` : ''}>
+      <div class="label">${esc(label)}${scope ? ` <span class="scope">${esc(scope)}</span>` : ''}</div>
+      <div class="value${v == null ? ' none' : ''}">${unit}${v == null ? 'sem dado' : fmt(v, t)}</div>
+      <div class="foot">${v == null && falta ? `<span class="missing">${esc(falta)}</span>` : metaBloco(k, t)}</div></div>`;
+  }
+  function ring(label, k, sub, falta) {
+    const v = k ? k.res : null, C = 2 * Math.PI * 44, p = v == null ? 0 : Math.max(0, Math.min(v, 100));
+    const cor = k ? (k.cor || faixa(pctDe(k))) : '';
+    return `<div class="tile t-ring t-half ${cor}"${k && k.nome ? ` title="Linha da planilha: ${esc(k.nome)}"` : ''}>
+      <svg class="ring" viewBox="0 0 100 100" role="img" aria-label="${esc(label)}: ${fmt(v, '%')}">
+        <circle class="track" cx="50" cy="50" r="44"></circle>
+        <circle class="arc" cx="50" cy="50" r="44" stroke-dasharray="${C * p / 100} ${C}"></circle>
+        <text x="50" y="50">${v == null ? '—' : Math.round(v) + '%'}</text></svg>
+      <div class="ring-info"><div class="label">${esc(label)}</div>
+        ${sub ? `<div class="metatxt">${sub}</div>` : ''}
+        ${v == null && falta ? `<span class="missing">${esc(falta)}</span>` : metaBloco(k, '%')}</div></div>`;
+  }
+  const semFonte = (e, nome) => e ? `${nome}: ${e.message}` : null;
+
+  function render() {
+    $('monthName').firstChild.nodeValue = MESES[sel.mes] + ' de ' + sel.ano;
+    const eAtual = sel.mes === hoje.getMonth() && sel.ano === hoje.getFullYear();
+    $('prev').disabled = sel.ano * 12 + sel.mes <= PRIMEIRO_MES.ano * 12 + PRIMEIRO_MES.mes;
+    $('next').disabled = eAtual;
+    const d = (dados.proc && dados.proc.dias) || (dados.kpis && dados.kpis.dias);
+    $('dias').textContent = d && d.cont != null && d.total != null ? `dia útil ${nf.format(d.cont)} de ${nf.format(d.total)}` : '';
+
+    // ----- Comercial -----
+    const K = dados.kpis ? dados.kpis.linhas : {}, F = dados.funil;
+    const kl = (...nomes) => { for (const n of nomes) if (K[n]) return K[n]; return null; };
+    const fErr = semFonte(erros.funil, 'Planilha do funil');
+    const kErr = semFonte(erros.kpis, 'KPIs do Comercial');
+    const leads = F && F.leads, reun = F && F.reunioes, diag = F && F.diagnosticos, cliF = F && F.clientes;
+    const txLR = leads && reun && leads.res > 0 && reun.res != null ? reun.res / leads.res * 100 : null;
+    const txRC = reun && cliF && reun.res > 0 && cliF.res != null ? cliF.res / reun.res * 100 : null;
+    const metaLR = kl('tx. de conversao (leads x reunioes)'), metaRC = kl('tx. de conversao (reuniao x clientes)');
+    const top = Math.max(leads && leads.res || 0, diag && diag.res || 0, reun && reun.res || 0, 1);
+    const w = x => `width:calc((100% - 9em) * ${(x || 0) / top})`;
+    const fRow = (nome, k) => `<span class="f-name">${nome}</span><div class="f-row"><div class="f-bar" style="${w(k && k.res)}"></div>
+        <span class="f-num">${fmt(k ? k.res : null, 'n')}</span>${k && k.meta != null ? `<span class="f-meta">meta ${fmt(k.meta, 'n')}</span>` : ''}</div>`;
+    const chip = (txt, v, meta) => `<div class="f-conv"><span>↓ ${txt}</span><span class="chip">${fmt(v, '%')}</span>${meta && meta.meta != null ? `<span class="f-meta">meta ${fmt(meta.meta, '%')}</span>` : ''}</div>`;
+    $('gridC').innerHTML = `
+      <div class="tile funnel"><div class="label">Funil do mês <span class="scope">Revisional de Plano de Saúde</span></div>
+        ${F ? `${fRow('Leads', leads)}
+          ${fRow('Diagnósticos', diag)}
+          ${chip('Conversão lead em reunião', txLR, metaLR)}
+          ${fRow('Reuniões realizadas', reun)}
+          ${chip('Conversão reunião em cliente', txRC, metaRC)}`
+          : `<span class="missing" style="grid-column:1/-1">${esc(fErr || 'Carregando…')}</span>`}
+      </div>
+      ${tile('', 'Clientes', kl('clientes', 'clientes fechados'), 'n', 'todos os produtos', kErr)}
+      ${tile('', 'Faturamento', kl('faturamento'), 'r', 'todos os produtos', kErr)}`;
+
+    // ----- Processual -----
+    const pErr = semFonte(erros.proc, 'Metas e Resultados - Processual');
+    const P = dados.proc ? dados.proc.linhas : null;
+    const pk = c => P ? acharProc(P, c) : null;
+    const falta = c => pErr || (P ? 'Linha não encontrada na planilha do mês' : 'Carregando…');
+    const sent = pk('sentencas'), proc = pk('procedentes');
+    let exito = pk('exito');
+    if (!exito && proc && sent && sent.res > 0) exito = { res: proc.res / sent.res * 100, nome: `${proc.nome} ÷ ${sent.nome}` };
+    const alv = pk('alvaras'), hon = pk('honorarios'), rec = pk('receber'), aco = pk('acoes'), dil = pk('diligencia');
+    $('gridP').innerHTML = `
+      ${tile('t-money', 'Alvarás creditados + acordos', alv, 'r', '', falta())}
+      ${tile('t-money', 'Honorários de êxito', hon, 'r', '', falta())}
+      ${tile('t-money', 'Alvarás a receber', rec, 'r', '', falta())}
+      ${tile('t-half', 'Ações distribuídas', aco, 'n', '', falta())}
+      ${tile('t-half', 'Sentenças e recursos', sent, 'n', '', falta())}
+      ${ring('Taxa de êxito', exito, proc && sent ? `${fmt(proc.res, 'n')} procedentes de ${fmt(sent.res, 'n')}` : '', falta())}
+      ${ring('Cumprimento de diligências', dil, '', falta())}`;
+
+    const fonte = (nome, e, d) => `<span class="${e ? 'err' : d ? 'ok' : ''}">${nome}${e ? ': ' + esc(e.message) : ''}</span>`;
+    $('fontes').innerHTML = fonte('KPIs do Comercial', erros.kpis, dados.kpis) + fonte('Funil Rev. Saúde', erros.funil, dados.funil) + fonte('Metas e Resultados - Processual', erros.proc, dados.proc);
+    // Diagnóstico: abrir o painel com #linhas lista os nomes das linhas do Processual
+    if (location.hash === '#linhas' && P) $('fontes').innerHTML += '<span>Linhas do Processual: ' + P.map(l => esc(l.nome)).join(' · ') + '</span>';
+    $('updated').textContent = ultimaCarga ? 'Atualizado às ' + ultimaCarga.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) + ' · atualiza sozinho a cada ' + AUTO_REFRESH_MIN + ' min' : '';
+  }
+
+  let carregando = false;
+  async function carregar() {
+    if (carregando) return; carregando = true;
+    $('refresh').classList.add('girando');
+    const m = { ...sel };
+    const [a, b, c] = await Promise.allSettled([lerKpisComercial(m), lerFunil(m), lerProcessual(m)]);
+    if (m.mes === sel.mes && m.ano === sel.ano) {
+      [['kpis', a], ['funil', b], ['proc', c]].forEach(([k, r]) => {
+        dados[k] = r.status === 'fulfilled' ? r.value : null;
+        erros[k] = r.status === 'rejected' ? r.reason : null;
+      });
+      ultimaCarga = new Date();
+      render();
+    }
+    $('refresh').classList.remove('girando');
+    carregando = false;
+  }
+  function trocarMes(delta) {
+    const t = sel.ano * 12 + sel.mes + delta;
+    sel = { ano: Math.floor(t / 12), mes: t % 12 };
+    dados.kpis = dados.funil = dados.proc = null; erros.kpis = erros.funil = erros.proc = null;
+    render(); carregar();
+  }
+  $('prev').onclick = () => trocarMes(-1);
+  $('next').onclick = () => trocarMes(1);
+  $('refresh').onclick = () => carregar();
+  window.addEventListener('hashchange', () => render());
+
+  // Relógio
+  const tick = () => { $('clock').textContent = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }); };
+  tick(); setInterval(tick, 15000);
+
+  // Modo TV: tela cheia + tela sempre acesa
+  let lock = null;
+  async function pedirLock() { try { if (navigator.wakeLock) lock = await navigator.wakeLock.request('screen'); } catch (e) {} }
+  $('tvBtn').onclick = async () => {
+    const liga = !document.body.classList.contains('tv');
+    document.body.classList.toggle('tv', liga);
+    try { if (liga && !document.fullscreenElement) await document.documentElement.requestFullscreen(); else if (!liga && document.fullscreenElement) await document.exitFullscreen(); } catch (e) {}
+    if (liga) pedirLock();
+  };
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) return;
+    if (document.body.classList.contains('tv')) pedirLock();
+    if (ultimaCarga && Date.now() - ultimaCarga > 2 * 60 * 1000) carregar();
+  });
+
+  // Virada do mês: a TV passa sozinha para o mês novo
+  function mesAtual() { const d = new Date(); return { mes: d.getMonth(), ano: d.getFullYear() }; }
+  let mesDaTela = mesAtual();
+  setInterval(() => {
+    const agora = mesAtual();
+    if (agora.mes !== mesDaTela.mes && sel.mes === mesDaTela.mes && sel.ano === mesDaTela.ano) { mesDaTela = agora; sel = agora; carregar(); }
+    else carregar();
+  }, AUTO_REFRESH_MIN * 60 * 1000);
+
+  // Início: cofre com a sessão da Central; sem ela, login próprio
+  async function iniciar(cred) {
+    const segredo = await abrirCofre(cred.u, cred.s);
+    PROC.SHEET_ID = segredo.SHEET_ID;
+    PROC.GOOGLE_API_KEY = segredo.GOOGLE_API_KEY;
+    $('login').hidden = true;
+    render(); carregar();
+  }
+  $('loginForm').addEventListener('submit', async e => {
+    e.preventDefault();
+    const cred = { u: $('lg-u').value, s: $('lg-s').value };
+    $('lg-btn').disabled = true; $('lg-erro').textContent = 'Conferindo…';
+    try {
+      await iniciar(cred);
+      try { sessionStorage.setItem('bm_portal_cred', JSON.stringify(cred)); } catch (e2) {}
+    } catch (err) {
+      $('lg-erro').textContent = 'Usuário ou senha sem acesso a este painel.';
+    } finally { $('lg-btn').disabled = false; }
+  });
+  render();
+  const cred = credDaSessao();
+  if (cred) iniciar(cred).catch(() => { $('login').hidden = false; });
+  else $('login').hidden = false;
+})();
+</script>
+</body>
+</html>
