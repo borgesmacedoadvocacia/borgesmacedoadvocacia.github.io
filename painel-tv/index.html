@@ -457,6 +457,24 @@ footer .err{color:var(--muted)}
     return { res: total ? cumpridas / total * 100 : null, cumpridas, total, standby, nome: 'Diligências › TODAS AS DILIGÊNCIAS' };
   }
 
+  /* Taxa de êxito e Sentenças e recursos: planilha "Metas e Resultados - Processual"
+     indicada pelo escritório (aberta por link), aba "Resultados Gerais - Mês/AAAA".
+     Êxito = (Sentenças [PROCEDÊNCIA] + Recursos de Mérito [RESULTADO POSITIVO])
+           ÷ (Sentenças [TOTAL] + Recursos de Mérito [TOTAL]).
+     As linhas "- Dir. Bancário" ficam de fora: são outro produto e não têm meta. */
+  const EXITO_ID = '1JpfoE6EpMMRb-DBnwBtVVaJzkL9USr1YzZ9n4qMCQP0';
+  async function lerExito(m) {
+    const g = await getCSV(`https://docs.google.com/spreadsheets/d/${EXITO_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(PROC.ABA_PREFIXO + MESES[m.mes] + '/' + m.ano)}`);
+    if (norm(g[0] && g[0][0]) !== 'metrica') throw new Error('aba do mês não encontrada');
+    const L = {};
+    g.forEach(r => { const k = norm(r[0]); if (k) L[k] = num(r[3]); });   // coluna D = resultado
+    const pega = nome => { const v = L[norm(nome)]; if (v == null) throw new Error(`linha "${nome}" não encontrada`); return v; };
+    const sent = pega('Sentenças [TOTAL]'), sentProc = pega('Sentenças [PROCEDÊNCIA]');
+    const rec = pega('Recursos de Mérito [TOTAL]'), recPos = pega('Recursos de Mérito [RESULTADO POSITIVO]');
+    const total = sent + rec, proc = sentProc + recPos;
+    return { sent, sentProc, rec, recPos, total, proc, taxa: total > 0 ? proc / total * 100 : null };
+  }
+
   /* Cada KPI do Processual é a linha da planilha cujo nome casa com a regra.
      A primeira regra que achar linha vence. */
   const REGRAS_PROC = {
@@ -480,8 +498,8 @@ footer .err{color:var(--muted)}
   // ---------- estado ----------
   const hoje = new Date();
   let sel = { mes: hoje.getMonth(), ano: hoje.getFullYear() };
-  const dados = { kpis: null, funil: null, proc: null, exec: null, dil: null };
-  const erros = { kpis: null, funil: null, proc: null, exec: null, dil: null };
+  const dados = { kpis: null, funil: null, proc: null, exec: null, dil: null, exito: null };
+  const erros = { kpis: null, funil: null, proc: null, exec: null, dil: null, exito: null };
   let ultimaCarga = null;
 
   const nf = new Intl.NumberFormat('pt-BR');
@@ -521,7 +539,7 @@ footer .err{color:var(--muted)}
     return `<div class="tile t-ring t-half ${cor}"${k && k.nome ? ` title="Linha da planilha: ${esc(k.nome)}"` : ''}>
       <svg class="ring" viewBox="0 0 100 100" role="img" aria-label="${esc(label)}: ${fmt(v, '%')}">
         <circle class="track" cx="50" cy="50" r="44"></circle>
-        <circle class="arc" cx="50" cy="50" r="44" stroke-dasharray="${C * p / 100} ${C}"></circle>
+        ${p > 0 ? `<circle class="arc" cx="50" cy="50" r="44" stroke-dasharray="${C * p / 100} ${C}"></circle>` : ''}
         <text x="50" y="50">${v == null ? '—' : Math.round(v) + '%'}</text></svg>
       <div class="ring-info"><div class="label">${esc(label)}</div>
         ${sub ? `<div class="metatxt">${sub}</div>` : ''}
@@ -587,23 +605,26 @@ footer .err{color:var(--muted)}
     const P = dados.proc ? dados.proc.linhas : null;
     const pk = c => P ? acharProc(P, c) : null;
     const falta = c => pErr || (P ? 'Linha não encontrada na planilha do mês' : 'Carregando…');
-    const sent = pk('sentencas'), proc = pk('procedentes');
-    let exito = pk('exito');
-    if (!exito && proc && sent && sent.res > 0) exito = { res: proc.res / sent.res * 100, nome: `${proc.nome} ÷ ${sent.nome}` };
+    const E = dados.exito;
+    const eFalta = erros.exito ? 'Resultados Gerais: ' + erros.exito.message : 'Carregando…';
     const alv = pk('alvaras'), hon = pk('honorarios'), aco = pk('acoes'), D = dados.dil;
     $('gridP').innerHTML = `
       ${tile('t-money', 'Alvarás creditados + acordos', alv, 'r', '', falta())}
       ${tile('t-money', 'Honorários de êxito', hon, 'r', '', falta())}
       ${receberTile()}
       ${tile('t-half', 'Ações distribuídas', aco, 'n', '', falta())}
-      ${tile('t-half', 'Sentenças e recursos', sent, 'n', '', falta())}
-      ${ring('Taxa de êxito', exito, proc && sent ? `${fmt(proc.res, 'n')} procedentes de ${fmt(sent.res, 'n')}` : '', falta())}
+      <div class="tile t-half" title="Sentenças [TOTAL] + Recursos de Mérito [TOTAL]">
+        <div class="label">Sentenças e recursos</div>
+        <div class="value${E ? '' : ' none'}">${E ? fmt(E.total, 'n') : 'sem dado'}</div>
+        <div class="foot">${E ? `<div class="metatxt"><span>${fmt(E.sent, 'n')} sentenças + ${fmt(E.rec, 'n')} recursos de mérito</span></div>` : `<span class="missing">${esc(eFalta)}</span>`}</div></div>
+      ${ring('Taxa de êxito', E ? { res: E.taxa, nome: 'procedências ÷ sentenças e recursos' } : null,
+        E ? `${fmt(E.proc, 'n')} favoráveis de ${fmt(E.total, 'n')} · ${fmt(E.sentProc, 'n')} procedências + ${fmt(E.recPos, 'n')} recursos providos` : '', eFalta)}
       ${ring('Cumprimento de diligências', D ? { res: D.res, nome: D.nome } : null,
         D ? `${nf.format(D.cumpridas)} cumpridas de ${nf.format(D.total)} · ${nf.format(D.standby)} em Standy By fora da conta · posição atual` : '',
         erros.dil ? 'Diligências: ' + erros.dil.message : 'Carregando…')}`;
 
     const fonte = (nome, e, d) => `<span class="${e ? 'err' : d ? 'ok' : ''}">${nome}${e ? ': ' + esc(e.message) : ''}</span>`;
-    $('fontes').innerHTML = fonte('KPIs do Comercial', erros.kpis, dados.kpis) + fonte('Funil Rev. Saúde', erros.funil, dados.funil) + fonte('Metas e Resultados - Processual', erros.proc, dados.proc) + fonte('Execuções (Alvarás)', erros.exec, dados.exec) + fonte('Diligências', erros.dil, dados.dil);
+    $('fontes').innerHTML = fonte('KPIs do Comercial', erros.kpis, dados.kpis) + fonte('Funil Rev. Saúde', erros.funil, dados.funil) + fonte('Metas e Resultados - Processual', erros.proc, dados.proc) + fonte('Execuções (Alvarás)', erros.exec, dados.exec) + fonte('Diligências', erros.dil, dados.dil) + fonte('Resultados Gerais (êxito)', erros.exito, dados.exito);
     // Diagnóstico: abrir o painel com #linhas lista os nomes das linhas do Processual
     if (location.hash === '#linhas' && P) $('fontes').innerHTML += '<span>Linhas do Processual: ' + P.map(l => esc(l.nome)).join(' · ') + '</span>';
     $('updated').textContent = ultimaCarga ? 'Atualizado às ' + ultimaCarga.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) + ' · atualiza sozinho a cada ' + AUTO_REFRESH_MIN + ' min' : '';
@@ -614,11 +635,12 @@ footer .err{color:var(--muted)}
     if (carregando) return; carregando = true;
     $('refresh').classList.add('girando');
     const m = { ...sel };
-    const [a, b, c, x, y] = await Promise.allSettled([lerKpisComercial(m), lerFunil(m), lerProcessual(m),
+    const [a, b, c, x, y, z] = await Promise.allSettled([lerKpisComercial(m), lerFunil(m), lerProcessual(m),
       EXEC.semAcesso ? Promise.reject(new Error('visível só para Administração e Lideranças')) : lerAlvarasReceber(),
-      DIL.semAcesso ? Promise.reject(new Error('visível só para Administração e Lideranças')) : lerDiligencias()]);
+      DIL.semAcesso ? Promise.reject(new Error('visível só para Administração e Lideranças')) : lerDiligencias(),
+      lerExito(m)]);
     if (m.mes === sel.mes && m.ano === sel.ano) {
-      [['kpis', a], ['funil', b], ['proc', c], ['exec', x], ['dil', y]].forEach(([k, r]) => {
+      [['kpis', a], ['funil', b], ['proc', c], ['exec', x], ['dil', y], ['exito', z]].forEach(([k, r]) => {
         dados[k] = r.status === 'fulfilled' ? r.value : null;
         erros[k] = r.status === 'rejected' ? r.reason : null;
       });
@@ -631,7 +653,7 @@ footer .err{color:var(--muted)}
   function trocarMes(delta) {
     const t = sel.ano * 12 + sel.mes + delta;
     sel = { ano: Math.floor(t / 12), mes: t % 12 };
-    dados.kpis = dados.funil = dados.proc = null; erros.kpis = erros.funil = erros.proc = null;
+    dados.kpis = dados.funil = dados.proc = dados.exito = null; erros.kpis = erros.funil = erros.proc = erros.exito = null;
     render(); carregar();
   }
   $('prev').onclick = () => trocarMes(-1);
