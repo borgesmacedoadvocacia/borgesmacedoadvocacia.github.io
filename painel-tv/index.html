@@ -15,6 +15,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Painel da TV | Borges Macedo</title>
 <link rel="icon" type="image/png" href="favicon.png">
+<!-- Configuração do painel "Metas e Resultados — Comercial": planilhas, metas e feriados -->
+<script src="https://borgesmacedoadvocacia.github.io/dashboard/config.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&display=swap">
 <style>
@@ -459,6 +461,70 @@ footer .err{color:var(--muted)}
     return { res: total ? cumpridas / total * 100 : null, cumpridas, total, standby, nome: 'Diligências › TODAS AS DILIGÊNCIAS' };
   }
 
+  /* Reuniões realizadas, Clientes e Faturamento: mesmas planilhas, metas e regras do
+     painel "Metas e Resultados — Comercial" (repo dashboard). A configuração dele
+     (planilhas, colunas, metas e feriados) é lida do próprio config.js, carregado
+     no <head>; se alguém mudar uma meta lá, a TV acompanha.
+     - Reuniões: "Status do Atendimento" = Realizado, pela "Data do Atendimento".
+     - Clientes e Faturamento: contratos pela "DATA DO FECHAMENTO"; faturamento = "VALOR DA ENTRADA".
+     - Meta proporcional: meta × dias úteis passados ÷ dias úteis do mês (sem fins de semana e feriados). */
+  const MCFG = typeof CONFIG !== 'undefined' ? CONFIG : null;
+  async function abaPorGid(id, gid) {
+    const key = MCFG.GOOGLE_API_KEY;
+    const meta = await (await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${id}?fields=sheets.properties&key=${key}`)).json();
+    const aba = (meta.sheets || []).find(s => String(s.properties.sheetId) === String(gid));
+    if (!aba) throw new Error('aba não encontrada');
+    const r = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${id}/values/${encodeURIComponent(aba.properties.title)}?key=${key}&_=${Date.now()}`, { cache: 'no-store' });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const v = (await r.json()).values || [];
+    const cab = (v[0] || []).map(h => String(h).trim());
+    return v.slice(1).map(l => Object.fromEntries(cab.map((h, i) => [h, String(l[i] == null ? '' : l[i]).trim()])))
+      .filter(o => Object.values(o).some(Boolean));
+  }
+  function pascoa(ano) {
+    const a = ano % 19, b = Math.floor(ano / 100), c = ano % 100, d = Math.floor(b / 4), e = b % 4;
+    const f = Math.floor((b + 8) / 25), g = Math.floor((b - f + 1) / 3), h = (19 * a + b - d - g + 15) % 30;
+    const i = Math.floor(c / 4), k = c % 4, l = (32 + 2 * e + 2 * i - h - k) % 7, m = Math.floor((a + 11 * h + 22 * l) / 451);
+    return new Date(ano, Math.floor((h + l - 7 * m + 114) / 31) - 1, ((h + l - 7 * m + 114) % 31) + 1);
+  }
+  function feriados(ano) {
+    const iso = d => d.toISOString().slice(0, 10);
+    const soma = (base, n) => { const d = new Date(base); d.setDate(d.getDate() + n); return iso(d); };
+    const p = pascoa(ano);
+    return new Set([`${ano}-01-01`, `${ano}-04-21`, `${ano}-05-01`, `${ano}-09-07`, `${ano}-10-12`, `${ano}-11-02`,
+      `${ano}-11-15`, `${ano}-11-20`, `${ano}-12-25`, soma(p, -48), soma(p, -47), soma(p, -2), iso(p), soma(p, 60),
+      ...(MCFG.FERIADOS_EXTRAS || [])]);
+  }
+  function diasUteis(ano, mes, ate) {
+    const fer = feriados(ano); let n = 0;
+    for (let d = 1; d <= ate; d++) { const dt = new Date(ano, mes, d), w = dt.getDay(); if (w && w !== 6 && !fer.has(dt.toISOString().slice(0, 10))) n++; }
+    return n;
+  }
+  const dataBR = s => { const p = String(s || '').trim().split('/'); if (p.length !== 3) return null; const d = new Date(+p[2], +p[1] - 1, +p[0]); return isNaN(d) ? null : d; };
+  const brlDash = s => parseFloat(String(s || '').replace(/[^\d,]/g, '').replace(',', '.')) || 0;
+  async function lerMetasComercial(m) {
+    if (!MCFG) throw new Error('configuração do painel não carregou');
+    const A = MCFG.SHEET_ATENDIMENTOS, K = MCFG.SHEET_CONTRATOS;
+    const [atend, contr] = await Promise.all([abaPorGid(A.ID, A.GID), abaPorGid(K.ID, K.GID)]);
+    const agora = new Date();
+    const eAtual = m.mes === agora.getMonth() && m.ano === agora.getFullYear();
+    const ultimo = new Date(m.ano, m.mes + 1, 0).getDate();
+    const ini = new Date(m.ano, m.mes, 1), fim = new Date(m.ano, m.mes, eAtual ? agora.getDate() : ultimo, 23, 59, 59);
+    const noMes = d => d && d >= ini && d <= fim;
+    const total = diasUteis(m.ano, m.mes, ultimo), cont = eAtual ? diasUteis(m.ano, m.mes, agora.getDate()) : total;
+    const prop = meta => total > 0 ? meta * cont / total : null;
+    const reun = atend.filter(r => noMes(dataBR(r[A.COLS.DATA_ATENDIMENTO])) && r[A.COLS.STATUS_ATENDIMENTO] === A.STATUS_REALIZADO).length;
+    const fech = contr.filter(r => noMes(dataBR(r[K.COLS.DATA_FECHAMENTO])));
+    const fat = fech.reduce((s, r) => s + brlDash(r[K.COLS.HONORARIOS]), 0);
+    const kpi = (res, meta) => ({ res, meta, metaProp: prop(meta) });
+    return {
+      reunioes: kpi(reun, MCFG.META_REUNIOES && MCFG.META_REUNIOES.realizadas),
+      clientes: kpi(fech.length, MCFG.META_CLIENTES),
+      faturamento: kpi(fat, MCFG.META_TOTAL),
+      dias: { cont, total },
+    };
+  }
+
   /* Taxa de êxito e Sentenças e recursos: planilha "Metas e Resultados - Processual"
      indicada pelo escritório (aberta por link), aba "Resultados Gerais - Mês/AAAA".
      Êxito = (Sentenças [PROCEDÊNCIA] + Recursos de Mérito [RESULTADO POSITIVO])
@@ -500,8 +566,8 @@ footer .err{color:var(--muted)}
   // ---------- estado ----------
   const hoje = new Date();
   let sel = { mes: hoje.getMonth(), ano: hoje.getFullYear() };
-  const dados = { kpis: null, funil: null, proc: null, exec: null, dil: null, exito: null };
-  const erros = { kpis: null, funil: null, proc: null, exec: null, dil: null, exito: null };
+  const dados = { kpis: null, funil: null, proc: null, exec: null, dil: null, exito: null, mc: null };
+  const erros = { kpis: null, funil: null, proc: null, exec: null, dil: null, exito: null, mc: null };
   let ultimaCarga = null;
 
   const nf = new Intl.NumberFormat('pt-BR');
@@ -568,10 +634,10 @@ footer .err{color:var(--muted)}
     $('next').disabled = eAtual;
     // Cada planilha conta os dias do seu jeito: o Comercial usa dias corridos,
     // o Processual usa "dias contabilizados". A meta proporcional de cada lado segue a sua conta.
-    const dc = dados.kpis && dados.kpis.dias, dp = dados.proc && dados.proc.dias;
+    const dc = dados.mc && dados.mc.dias, dp = dados.proc && dados.proc.dias;
     const ok = d => d && d.cont != null && d.total != null;
     $('dias').textContent = [
-      ok(dc) ? `Comercial: dia ${nf.format(dc.cont)} de ${nf.format(dc.total)}` : '',
+      ok(dc) ? `Comercial: dia útil ${nf.format(dc.cont)} de ${nf.format(dc.total)}` : '',
       ok(dp) ? `Processual: dia útil ${nf.format(dp.cont)} de ${nf.format(dp.total)}` : '',
     ].filter(Boolean).join(' · ');
 
@@ -580,9 +646,12 @@ footer .err{color:var(--muted)}
     const kl = (...nomes) => { for (const n of nomes) if (K[n]) return K[n]; return null; };
     const fErr = semFonte(erros.funil, 'Planilha do funil');
     const kErr = semFonte(erros.kpis, 'KPIs do Comercial');
-    const leads = F && F.leads, reun = F && F.reunioes, diag = F && F.diagnosticos, cliF = F && F.clientes;
-    const txLR = leads && reun && leads.res > 0 && reun.res != null ? reun.res / leads.res * 100 : null;
-    const txRC = reun && cliF && reun.res > 0 && cliF.res != null ? cliF.res / reun.res * 100 : null;
+    // Reuniões, Clientes e Faturamento: mesmos números do painel "Metas e Resultados — Comercial"
+    const MC = dados.mc, mcErr = semFonte(erros.mc, 'Metas e Resultados — Comercial');
+    const leads = F && F.leads, diag = F && F.diagnosticos;
+    const reun = MC && MC.reunioes, cli = MC && MC.clientes;
+    const txLR = leads && reun && leads.res > 0 ? reun.res / leads.res * 100 : null;
+    const txRC = reun && cli && reun.res > 0 ? cli.res / reun.res * 100 : null;
     const metaLR = kl('tx. de conversao (leads x reunioes)'), metaRC = kl('tx. de conversao (reuniao x clientes)');
     // Barra de meta igual à dos quadros: a trilha inteira é a meta do mês, o traço
     // marca a meta proporcional e a cor segue o % da meta proporcional
@@ -604,16 +673,16 @@ footer .err{color:var(--muted)}
         <div class="f-row">${fBar(k)}<span class="f-num">${fmt(k ? k.res : null, 'n')}</span></div>`;
     const chip = (txt, v, meta) => `<div class="f-conv"><span>↓ ${txt}</span><span class="chip">${fmt(v, '%')}</span>${meta && meta.meta != null ? `<span class="f-meta">meta ${fmt(meta.meta, '%')}</span>` : ''}</div>`;
     $('gridC').innerHTML = `
-      <div class="tile funnel"><div class="label">Funil do mês <span class="scope">Revisional de Plano de Saúde</span></div>
+      <div class="tile funnel"><div class="label">Funil do mês <span class="scope">leads e diagnósticos: Revisional de Plano de Saúde</span></div>
         ${F ? `${fRow('Leads', leads)}
-          ${fRow('Diagnósticos', diag)}
-          ${chip('Conversão lead em reunião', txLR, metaLR)}
-          ${fRow('Reuniões realizadas', reun)}
-          ${chip('Conversão reunião em cliente', txRC, metaRC)}`
+          ${fRow('Diagnósticos', diag)}`
           : `<span class="missing" style="grid-column:1/-1">${esc(fErr || 'Carregando…')}</span>`}
+        ${chip('Conversão lead em reunião', txLR, metaLR)}
+        ${MC ? fRow('Reuniões realizadas', reun) : `<span class="missing" style="grid-column:1/-1">${esc(mcErr || 'Carregando…')}</span>`}
+        ${chip('Conversão reunião em cliente', txRC, metaRC)}
       </div>
-      ${tile('', 'Clientes', kl('clientes', 'clientes fechados'), 'n', 'todos os produtos', kErr)}
-      ${tile('', 'Faturamento', kl('faturamento'), 'r', 'todos os produtos', kErr)}`;
+      ${tile('', 'Clientes', cli, 'n', 'todos os produtos', mcErr)}
+      ${tile('', 'Faturamento', MC && MC.faturamento, 'r', 'todos os produtos', mcErr)}`;
 
     // ----- Processual -----
     const pErr = semFonte(erros.proc, 'Metas e Resultados - Processual');
@@ -636,7 +705,7 @@ footer .err{color:var(--muted)}
         erros.dil ? 'Diligências: ' + erros.dil.message : 'Carregando…')}`;
 
     const fonte = (nome, e, d) => `<span class="${e ? 'err' : d ? 'ok' : ''}">${nome}${e ? ': ' + esc(e.message) : ''}</span>`;
-    $('fontes').innerHTML = fonte('KPIs do Comercial', erros.kpis, dados.kpis) + fonte('Funil Rev. Saúde', erros.funil, dados.funil) + fonte('Metas e Resultados - Processual', erros.proc, dados.proc) + fonte('Execuções (Alvarás)', erros.exec, dados.exec) + fonte('Diligências', erros.dil, dados.dil) + fonte('Resultados Gerais (êxito)', erros.exito, dados.exito);
+    $('fontes').innerHTML = fonte('Metas e Resultados — Comercial', erros.mc, dados.mc) + fonte('KPIs do Comercial (metas das taxas)', erros.kpis, dados.kpis) +fonte('Funil Rev. Saúde', erros.funil, dados.funil) + fonte('Metas e Resultados - Processual', erros.proc, dados.proc) + fonte('Execuções (Alvarás)', erros.exec, dados.exec) + fonte('Diligências', erros.dil, dados.dil) + fonte('Resultados Gerais (êxito)', erros.exito, dados.exito);
     // Diagnóstico: abrir o painel com #linhas lista os nomes das linhas do Processual
     if (location.hash === '#linhas' && P) $('fontes').innerHTML += '<span>Linhas do Processual: ' + P.map(l => esc(l.nome)).join(' · ') + '</span>';
     $('updated').textContent = ultimaCarga ? 'Atualizado às ' + ultimaCarga.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) + ' · atualiza sozinho a cada ' + AUTO_REFRESH_MIN + ' min' : '';
@@ -647,12 +716,12 @@ footer .err{color:var(--muted)}
     if (carregando) return; carregando = true;
     $('refresh').classList.add('girando');
     const m = { ...sel };
-    const [a, b, c, x, y, z] = await Promise.allSettled([lerKpisComercial(m), lerFunil(m), lerProcessual(m),
+    const [a, b, c, x, y, z, w] = await Promise.allSettled([lerKpisComercial(m), lerFunil(m), lerProcessual(m),
       EXEC.semAcesso ? Promise.reject(new Error('visível só para Administração e Lideranças')) : lerAlvarasReceber(),
       DIL.semAcesso ? Promise.reject(new Error('visível só para Administração e Lideranças')) : lerDiligencias(),
-      lerExito(m)]);
+      lerExito(m), lerMetasComercial(m)]);
     if (m.mes === sel.mes && m.ano === sel.ano) {
-      [['kpis', a], ['funil', b], ['proc', c], ['exec', x], ['dil', y], ['exito', z]].forEach(([k, r]) => {
+      [['kpis', a], ['funil', b], ['proc', c], ['exec', x], ['dil', y], ['exito', z], ['mc', w]].forEach(([k, r]) => {
         dados[k] = r.status === 'fulfilled' ? r.value : null;
         erros[k] = r.status === 'rejected' ? r.reason : null;
       });
@@ -665,7 +734,7 @@ footer .err{color:var(--muted)}
   function trocarMes(delta) {
     const t = sel.ano * 12 + sel.mes + delta;
     sel = { ano: Math.floor(t / 12), mes: t % 12 };
-    dados.kpis = dados.funil = dados.proc = dados.exito = null; erros.kpis = erros.funil = erros.proc = erros.exito = null;
+    dados.kpis = dados.funil = dados.proc = dados.exito = dados.mc = null; erros.kpis = erros.funil = erros.proc = erros.exito = erros.mc = null;
     render(); carregar();
   }
   $('prev').onclick = () => trocarMes(-1);
