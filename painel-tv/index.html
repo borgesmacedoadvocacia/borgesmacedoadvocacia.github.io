@@ -83,6 +83,7 @@ section.area{display:grid;grid-template-rows:auto 1fr;gap:clamp(10px,.8vw,16px);
 .bar b{position:absolute;top:-.25em;bottom:-.25em;width:2px;background:var(--text);opacity:.55}
 .metatxt{font-size:.85em;color:var(--muted);display:flex;justify-content:space-between;gap:1em;font-variant-numeric:tabular-nums;flex-wrap:wrap}
 .pct{font-weight:600;color:var(--c,var(--muted))}
+.mp{color:var(--text);font-weight:600}
 .missing{font-size:.8em;color:var(--faint)}
 .verde{--c:var(--verde)} .amarelo{--c:var(--amarelo)} .vermelho{--c:var(--vermelho)}
 
@@ -421,7 +422,7 @@ footer .err{color:var(--muted)}
     const larg = k.res != null && k.meta > 0 ? Math.min(k.res / k.meta * 100, 100) : 0;
     const tick = k.metaProp != null && k.meta > 0 ? Math.min(k.metaProp / k.meta * 100, 100) : null;
     return `<div class="bar ${cor}"><i style="width:${larg}%"></i>${tick != null ? `<b style="left:${tick}%"></b>` : ''}</div>
-      <div class="metatxt ${cor}"><span>Meta do mês ${fmtMeta(k.meta, t)}</span>${pct != null ? `<span class="pct">${nf.format(Math.round(pct))}% da meta até hoje</span>` : ''}</div>`;
+      <div class="metatxt ${cor}"><span>Meta do mês ${fmtMeta(k.meta, t)}</span>${k.metaProp != null ? `<span>Meta proporcional <strong class="mp">${fmtMeta(k.metaProp, t)}</strong></span>` : ''}${pct != null ? `<span class="pct">${nf.format(Math.round(pct))}% da meta proporcional</span>` : ''}</div>`;
   }
   function tile(cls, label, k, t, scope, falta) {
     const v = k ? k.res : null;
@@ -465,7 +466,7 @@ footer .err{color:var(--muted)}
     const top = Math.max(leads && leads.res || 0, diag && diag.res || 0, reun && reun.res || 0, 1);
     const w = x => `width:calc((100% - 9em) * ${(x || 0) / top})`;
     const fRow = (nome, k) => `<span class="f-name">${nome}</span><div class="f-row"><div class="f-bar" style="${w(k && k.res)}"></div>
-        <span class="f-num">${fmt(k ? k.res : null, 'n')}</span>${k && k.meta != null ? `<span class="f-meta">meta ${fmt(k.meta, 'n')}</span>` : ''}</div>`;
+        <span class="f-num">${fmt(k ? k.res : null, 'n')}</span>${k && k.meta != null ? `<span class="f-meta">meta ${fmt(k.meta, 'n')}${k.metaProp != null ? ` · proporcional ${fmt(k.metaProp, 'n')}` : ''}</span>` : ''}</div>`;
     const chip = (txt, v, meta) => `<div class="f-conv"><span>↓ ${txt}</span><span class="chip">${fmt(v, '%')}</span>${meta && meta.meta != null ? `<span class="f-meta">meta ${fmt(meta.meta, '%')}</span>` : ''}</div>`;
     $('gridC').innerHTML = `
       <div class="tile funnel"><div class="label">Funil do mês <span class="scope">Revisional de Plano de Saúde</span></div>
