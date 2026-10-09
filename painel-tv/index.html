@@ -585,13 +585,25 @@ footer .err{color:var(--muted)}
     if (k.res != null && k.metaProp > 0) return k.res / k.metaProp * 100;
     return null;
   }
+  /* Quanto falta (ou sobra) para a meta proporcional: em reais nos valores,
+     em unidades inteiras nas contagens (arredonda para cima: 2,1 clientes = faltam 3). */
+  function faltaTxt(k, t) {
+    if (!k || t === '%' || k.res == null || k.metaProp == null) return '';
+    const dif = k.metaProp - k.res;
+    if (t === 'r') {
+      const brl = n => 'R$ ' + nf.format(Math.round(n));
+      return dif > 0 ? ` · faltam ${brl(dif)}` : ` · ${brl(-dif)} acima`;
+    }
+    const n = dif > 0 ? Math.ceil(dif) : Math.floor(-dif);
+    return dif > 0 ? ` · ${n === 1 ? 'falta 1' : 'faltam ' + nf.format(n)}` : (n > 0 ? ` · ${nf.format(n)} acima` : '');
+  }
   function metaBloco(k, t) {
     if (!k || k.meta == null) return '';
     const pct = pctDe(k), cor = k.cor || faixa(pct);
     const larg = k.res != null && k.meta > 0 ? Math.min(k.res / k.meta * 100, 100) : 0;
     const tick = k.metaProp != null && k.meta > 0 ? Math.min(k.metaProp / k.meta * 100, 100) : null;
     return `<div class="bar ${cor}"><i style="width:${larg}%"></i>${tick != null ? `<b style="left:${tick}%"></b>` : ''}</div>
-      <div class="metatxt ${cor}"><span>Meta do mês ${fmtMeta(k.meta, t)}</span>${k.metaProp != null ? `<span>Meta proporcional <strong class="mp">${fmtMeta(k.metaProp, t)}</strong></span>` : ''}${pct != null ? `<span class="pct">${nf.format(Math.round(pct))}% da meta proporcional</span>` : ''}</div>`;
+      <div class="metatxt ${cor}"><span>Meta do mês ${fmtMeta(k.meta, t)}</span>${k.metaProp != null ? `<span>Meta proporcional <strong class="mp">${fmtMeta(k.metaProp, t)}</strong></span>` : ''}${pct != null ? `<span class="pct">${nf.format(Math.round(pct))}% da meta proporcional${faltaTxt(k, t)}</span>` : ''}</div>`;
   }
   function tile(cls, label, k, t, scope, falta) {
     const v = k ? k.res : null;
@@ -667,7 +679,7 @@ footer .err{color:var(--muted)}
       if (!k || k.meta == null) return '';
       const pct = pctDe(k), cor = faixa(pct);
       return `<span class="f-sub ${cor}">Meta do mês ${fmt(k.meta, 'n')}${k.metaProp != null ? ` · Meta proporcional <strong class="mp">${fmt(k.metaProp, 'n')}</strong>` : ''}</span>` +
-        (pct != null ? `<span class="f-sub ${cor}"><span class="pct">${nf.format(Math.round(pct))}% da meta proporcional</span></span>` : '');
+        (pct != null ? `<span class="f-sub ${cor}"><span class="pct">${nf.format(Math.round(pct))}% da meta proporcional${faltaTxt(k, 'n')}</span></span>` : '');
     };
     const fRow = (nome, k) => `<div class="f-name"><strong class="f-etapa">${nome}</strong>${fMeta(k)}</div>
         <div class="f-row">${fBar(k)}<span class="f-num">${fmt(k ? k.res : null, 'n')}</span></div>`;
