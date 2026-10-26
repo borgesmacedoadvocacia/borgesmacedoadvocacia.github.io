@@ -314,13 +314,21 @@ footer .err{color:var(--muted)}
     return out;
   }
 
-  // Funil Rev. Saúde: cabeçalho na linha 1, linhas "Resultado Real", "Projeção Mensal", "Projeção Proporcional"
+  /* Funil: cabeçalho na linha 1, linhas "Resultado Real", "Projeção Mensal", "Projeção Proporcional".
+     A partir de out/2026 a planilha é "Metas e Resultados - Comercial [NOVA]", abas
+     "Produtos Jurídicos - Out/2026"; os meses anteriores seguem na planilha antiga. */
+  const FUNIL_NOVO_ID = '1BMMhLTsh2lx38v1xxdwD4BFC7lVTM2-D-kR7327hlFE';
+  const MES_CURTO = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
   async function lerFunil(m) {
     const mes = `${MESES[m.mes]}/${aa(m)}`;
+    const tentativas = [
+      [FUNIL_NOVO_ID, `Produtos Jurídicos - ${MES_CURTO[m.mes]}/${m.ano}`],
+      [FUNIL_ID, `Rev. Saúde [${mes}]`], [FUNIL_ID, `Produtos Jurídicos [${mes}]`],
+    ];
     let ultimoErro = null;
-    for (const aba of [`Rev. Saúde [${mes}]`, `Produtos Jurídicos [${mes}]`]) {
+    for (const [id, aba] of tentativas) {
       try {
-        const g = await getCSV(`https://docs.google.com/spreadsheets/d/${FUNIL_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(aba)}`);
+        const g = await getCSV(`https://docs.google.com/spreadsheets/d/${id}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(aba)}`);
         const cab = (g[0] || []).map(c => String(c).trim());
         if (!cab.includes('Responderam a Triagem') || !cab.includes('Clientes')) { ultimoErro = new Error('aba do mês não encontrada'); continue; }
         const linhas = {};
@@ -334,7 +342,7 @@ footer .err{color:var(--muted)}
           reunioes: pega(['Atendimentos Realizados']),
           clientes: pega(['Clientes']),
         };
-      } catch (e) { ultimoErro = e; if (e.message === 'planilha privada') break; }
+      } catch (e) { ultimoErro = e; }
     }
     throw ultimoErro || new Error('sem dados');
   }
@@ -690,7 +698,7 @@ footer .err{color:var(--muted)}
         <div class="f-row">${fBar(k)}<span class="f-num">${fmt(k ? k.res : null, 'n')}</span></div>`;
     const chip = (txt, v, meta) => `<div class="f-conv"><span>↓ ${txt}</span><span class="chip">${fmt(v, '%')}</span>${meta && meta.meta != null ? `<span class="f-meta">meta ${fmt(meta.meta, '%')}</span>` : ''}</div>`;
     $('gridC').innerHTML = `
-      <div class="tile funnel"><div class="label">Funil do mês <span class="scope">leads e diagnósticos: Revisional de Plano de Saúde</span></div>
+      <div class="tile funnel"><div class="label">Funil do mês <span class="scope">leads e diagnósticos: planilha Metas e Resultados - Comercial</span></div>
         ${F ? `${fRow('Leads', leads)}
           ${fRow('Diagnósticos', diag)}`
           : `<span class="missing" style="grid-column:1/-1">${esc(fErr || 'Carregando…')}</span>`}
@@ -722,7 +730,7 @@ footer .err{color:var(--muted)}
         erros.dil ? 'Diligências: ' + erros.dil.message : 'Carregando…')}`;
 
     const fonte = (nome, e, d) => `<span class="${e ? 'err' : d ? 'ok' : ''}">${nome}${e ? ': ' + esc(e.message) : ''}</span>`;
-    $('fontes').innerHTML = fonte('Metas e Resultados — Comercial', erros.mc, dados.mc) + fonte('KPIs do Comercial (metas das taxas)', erros.kpis, dados.kpis) +fonte('Funil Rev. Saúde', erros.funil, dados.funil) + fonte('Metas e Resultados - Processual', erros.proc, dados.proc) + fonte('Execuções (Alvarás)', erros.exec, dados.exec) + fonte('Diligências', erros.dil, dados.dil) + fonte('Resultados Gerais (êxito)', erros.exito, dados.exito);
+    $('fontes').innerHTML = fonte('Metas e Resultados — Comercial', erros.mc, dados.mc) + fonte('KPIs do Comercial (metas das taxas)', erros.kpis, dados.kpis) +fonte('Funil (Leads e Diagnósticos)', erros.funil, dados.funil) + fonte('Metas e Resultados - Processual', erros.proc, dados.proc) + fonte('Execuções (Alvarás)', erros.exec, dados.exec) + fonte('Diligências', erros.dil, dados.dil) + fonte('Resultados Gerais (êxito)', erros.exito, dados.exito);
     // Diagnóstico: abrir o painel com #linhas lista os nomes das linhas do Processual
     if (location.hash === '#linhas' && P) $('fontes').innerHTML += '<span>Linhas do Processual: ' + P.map(l => esc(l.nome)).join(' · ') + '</span>';
     $('updated').textContent = ultimaCarga ? 'Atualizado às ' + ultimaCarga.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) + ' · atualiza sozinho a cada ' + AUTO_REFRESH_MIN + ' min' : '';
