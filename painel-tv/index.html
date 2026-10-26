@@ -513,7 +513,12 @@ footer .err{color:var(--muted)}
     const noMes = d => d && d >= ini && d <= fim;
     const total = diasUteis(m.ano, m.mes, ultimo), cont = eAtual ? diasUteis(m.ano, m.mes, agora.getDate()) : total;
     const prop = meta => total > 0 ? meta * cont / total : null;
-    const reun = atend.filter(r => noMes(dataBR(r[A.COLS.DATA_ATENDIMENTO])) && r[A.COLS.STATUS_ATENDIMENTO] === A.STATUS_REALIZADO).length;
+    /* Mesma regra do painel: hoje é "toda etapa conta, menos as da lista STATUS_NAO_REALIZADO"
+       (desde 26/10/2026); configuração antiga usava um único STATUS_REALIZADO. */
+    const eRealizado = st => Array.isArray(A.STATUS_NAO_REALIZADO)
+      ? !A.STATUS_NAO_REALIZADO.includes(st || '')
+      : st === A.STATUS_REALIZADO;
+    const reun = atend.filter(r => noMes(dataBR(r[A.COLS.DATA_ATENDIMENTO])) && eRealizado(r[A.COLS.STATUS_ATENDIMENTO])).length;
     const fech = contr.filter(r => noMes(dataBR(r[K.COLS.DATA_FECHAMENTO])));
     const fat = fech.reduce((s, r) => s + brlDash(r[K.COLS.HONORARIOS]), 0);
     const kpi = (res, meta) => ({ res, meta, metaProp: prop(meta) });
