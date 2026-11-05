@@ -530,20 +530,10 @@ footer .err{color:var(--muted)}
      - Clientes e Faturamento: contratos pela "DATA DO FECHAMENTO"; faturamento = "VALOR DA ENTRADA".
      - Meta proporcional: meta × dias úteis passados ÷ dias úteis do mês (sem fins de semana e feriados). */
   const MCFG = typeof CONFIG !== 'undefined' ? CONFIG : null;
-  /* A chave de API vem do cofre deste painel, não mais do config.js: aquele
-     arquivo é público, e a chave não tem por que viver num repositório. */
-  async function abaPorGid(id, gid) {
-    const key = PROC.GOOGLE_API_KEY;
-    const meta = await (await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${id}?fields=sheets.properties&key=${key}`)).json();
-    const aba = (meta.sheets || []).find(s => String(s.properties.sheetId) === String(gid));
-    if (!aba) throw new Error('aba não encontrada');
-    const r = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${id}/values/${encodeURIComponent(aba.properties.title)}?key=${key}&_=${Date.now()}`, { cache: 'no-store' });
-    if (!r.ok) throw new Error('HTTP ' + r.status);
-    const v = (await r.json()).values || [];
-    return comoObjetos(v);
-  }
-  /* Linhas cruas (cabeçalho na primeira) viram objetos por nome de coluna —
-     mesma forma que o abaPorGid devolvia, venham do proxy ou da API. */
+  /* A leitura por gid + chave de API saiu daqui em 05/11/2026: as duas
+     planilhas deste bloco passaram a vir pelo proxy, e com elas foi embora a
+     última coisa que este painel lia direto do Google com chave. */
+  /* Linhas cruas (cabeçalho na primeira) viram objetos por nome de coluna. */
   function comoObjetos(linhas) {
     const cab = ((linhas && linhas[0]) || []).map(h => String(h).trim());
     return (linhas || []).slice(1)
@@ -574,11 +564,13 @@ footer .err{color:var(--muted)}
   async function lerMetasComercial(m) {
     if (!MCFG) throw new Error('configuração do painel não carregou');
     const A = MCFG.SHEET_ATENDIMENTOS, K = MCFG.SHEET_CONTRATOS;
-    /* Os contratos vêm pelo proxy (fonte "clientes", aba DADOS): é o que
-       permite o FLUXO DE CLIENTES voltar a ser privado. Os atendimentos
-       seguem pela chave de API, em planilha que não faz parte desta leva. */
+    /* As duas vêm pelo proxy: "atend" é a aba Fluxo de Atendimentos da
+       planilha de atendimentos (a mesma que o config.js aponta, gid 0) e
+       "clientes" é a aba DADOS do FLUXO DE CLIENTES. É o que permite as duas
+       planilhas voltarem a ser privadas. Do config.js este bloco só usa os
+       nomes das colunas e a lista de etapas que não contam como realizadas. */
     const [atend, contr] = await Promise.all([
-      abaPorGid(A.ID, A.GID),
+      lerPeloProxy('atend').then(comoObjetos),
       lerPeloProxy('clientes').then(comoObjetos)
     ]);
     const agora = new Date();
