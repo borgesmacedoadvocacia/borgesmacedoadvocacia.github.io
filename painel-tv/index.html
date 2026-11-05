@@ -197,10 +197,11 @@ footer .err{color:var(--muted)}
   /* Fontes — as mesmas planilhas dos painéis existentes:
      - "KPIs do Comercial" (painel KPIs do Comercial): Clientes, Faturamento e metas das taxas.
      - "Metas e Resultados - Comercial" (funil Rev. Saúde): Leads, Diagnósticos, Atendimentos.
+       Lida pelo proxy desde 05/11/2026, mês a mês, assim como os contratos do
+       FLUXO DE CLIENTES — é o que permite as duas voltarem a ser privadas.
      - "Metas e Resultados - Processual" (painel dashboard-processual): todo o Processual.
        O ID e a chave dessa planilha ficam no cofre, copiado do dashboard-processual. */
   const KPIS_COM_ID = '1x6G-5tsHeEPqN850awNObJM9cpqTdui8j0RVEygJviQ';
-  const FUNIL_ID    = '1o1UY_NwKlq07c2wFrkQXecK8Cs5jsHtuRzDFIWQGkSM';
   const PROC = { SHEET_ID: null, GOOGLE_API_KEY: null, ABA_PREFIXO: 'Resultados Gerais - ' };
 
   const COFRES = [
@@ -264,6 +265,53 @@ footer .err{color:var(--muted)}
     catch (e) { return null; }
   }
 
+  /* ===== LEITURA PELO PROXY =====
+     O proxy é um web app Apps Script que roda com a conta dona das planilhas.
+     Enquanto esta tela lia o funil e os contratos direto do Google, as
+     planilhas de Metas e o FLUXO DE CLIENTES PRECISAVAM continuar abertos a
+     quem tem o link. Pela leitura do proxy o dado sai do servidor, e só então
+     dá para fechar as planilhas de verdade.
+     A credencial é a MESMA do login daqui: o token sai da senha (nunca a
+     senha), pela mesma derivação do painel do CEO. O endereço do proxy não é
+     segredo — sem a senha ele responde "credencial inválida" e nada mais. */
+  const PROXY_URL = 'https://script.google.com/macros/s/AKfycbytVOChmKQ0X_WUn0a4cl8MN3sNWv7XDIaso7D479x_8IM5I5PyLQIgukF-cqteXFbdeA/exec';
+  let TOKEN_PROXY = null;
+
+  async function derivarToken(usuario, senha) {
+    const enc = new TextEncoder();
+    const material = await crypto.subtle.importKey(
+      'raw', enc.encode(normUsuario(usuario) + '\n' + senha), 'PBKDF2', false, ['deriveBits']);
+    const bits = await crypto.subtle.deriveBits(
+      { name: 'PBKDF2', salt: enc.encode('bm-painel-comercial-v1'), iterations: 310000, hash: 'SHA-256' },
+      material, 256);
+    let s = '';
+    new Uint8Array(bits).forEach(b => { s += String.fromCharCode(b); });
+    return btoa(s);
+  }
+
+  async function lerPeloProxy(fonte) {
+    if (!TOKEN_PROXY) throw new Error('sem credencial do proxy nesta sessão');
+    /* text/plain de propósito: mantém a requisição "simples" e evita o
+       preflight OPTIONS, que o Apps Script não responde. */
+    const resp = await fetch(PROXY_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ auth: TOKEN_PROXY, fontes: [fonte] }),
+      cache: 'no-store'
+    });
+    if (!resp.ok) throw new Error('o proxy respondeu HTTP ' + resp.status);
+    const j = await resp.json();
+    if (!j.ok) throw new Error(j.erro || 'o proxy recusou a credencial');
+    if (j.erros && j.erros[fonte]) throw new Error(j.erros[fonte]);
+    const d = j.dados && j.dados[fonte];
+    if (!d || !d.linhas || !d.linhas.length) throw new Error('aba do mês não encontrada');
+    return d.linhas;
+  }
+
+  /* Sufixo da chave mês a mês no proxy: "Março" -> "Marco". */
+  const MES_CHAVE = ['Janeiro', 'Fevereiro', 'Marco', 'Abril', 'Maio', 'Junho',
+                     'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+
   // ---------- leitura e números ----------
   function parseCSV(text) {
     const rows = []; let row = [], cur = '', inQ = false;
@@ -317,18 +365,23 @@ footer .err{color:var(--muted)}
   /* Funil: cabeçalho na linha 1, linhas "Resultado Real", "Projeção Mensal", "Projeção Proporcional".
      A partir de out/2026 a planilha é "Metas e Resultados - Comercial [NOVA]", abas
      "Produtos Jurídicos - Out/2026"; os meses anteriores seguem na planilha antiga. */
-  const FUNIL_NOVO_ID = '1BMMhLTsh2lx38v1xxdwD4BFC7lVTM2-D-kR7327hlFE';
   const MES_CURTO = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  /* Os IDs das duas planilhas de Metas sairam daqui em 05/11/2026: este
+     repositório é público. Quem as lê agora é o proxy, pelas fontes mês a
+     mês, na mesma ordem de tentativa de antes — a [NOVA] primeiro, depois as
+     duas famílias da antiga.
+     As fontes do proxy montam o nome da aba com o ANO CORRENTE. Pedir um mês
+     de outro ano leria a aba do ano errado sem dar erro, então isso é
+     barrado aqui: fora do ano corrente, a tela mostra "aba do mês não
+     encontrada", que é o aviso que ela já sabe exibir. */
   async function lerFunil(m) {
-    const mes = `${MESES[m.mes]}/${aa(m)}`;
-    const tentativas = [
-      [FUNIL_NOVO_ID, `Produtos Jurídicos - ${MES_CURTO[m.mes]}/${m.ano}`],
-      [FUNIL_ID, `Rev. Saúde [${mes}]`], [FUNIL_ID, `Produtos Jurídicos [${mes}]`],
-    ];
+    if (m.ano !== new Date().getFullYear()) throw new Error('aba do mês não encontrada');
+    const chave = MES_CHAVE[m.mes];
+    const tentativas = ['prodNova' + chave, 'revSaude' + chave, 'prodAntiga' + chave];
     let ultimoErro = null;
-    for (const [id, aba] of tentativas) {
+    for (const fonte of tentativas) {
       try {
-        const g = await getCSV(`https://docs.google.com/spreadsheets/d/${id}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(aba)}`);
+        const g = await lerPeloProxy(fonte);
         const cab = (g[0] || []).map(c => String(c).trim());
         if (!cab.includes('Responderam a Triagem') || !cab.includes('Clientes')) { ultimoErro = new Error('aba do mês não encontrada'); continue; }
         const linhas = {};
@@ -477,16 +530,24 @@ footer .err{color:var(--muted)}
      - Clientes e Faturamento: contratos pela "DATA DO FECHAMENTO"; faturamento = "VALOR DA ENTRADA".
      - Meta proporcional: meta × dias úteis passados ÷ dias úteis do mês (sem fins de semana e feriados). */
   const MCFG = typeof CONFIG !== 'undefined' ? CONFIG : null;
+  /* A chave de API vem do cofre deste painel, não mais do config.js: aquele
+     arquivo é público, e a chave não tem por que viver num repositório. */
   async function abaPorGid(id, gid) {
-    const key = MCFG.GOOGLE_API_KEY;
+    const key = PROC.GOOGLE_API_KEY;
     const meta = await (await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${id}?fields=sheets.properties&key=${key}`)).json();
     const aba = (meta.sheets || []).find(s => String(s.properties.sheetId) === String(gid));
     if (!aba) throw new Error('aba não encontrada');
     const r = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${id}/values/${encodeURIComponent(aba.properties.title)}?key=${key}&_=${Date.now()}`, { cache: 'no-store' });
     if (!r.ok) throw new Error('HTTP ' + r.status);
     const v = (await r.json()).values || [];
-    const cab = (v[0] || []).map(h => String(h).trim());
-    return v.slice(1).map(l => Object.fromEntries(cab.map((h, i) => [h, String(l[i] == null ? '' : l[i]).trim()])))
+    return comoObjetos(v);
+  }
+  /* Linhas cruas (cabeçalho na primeira) viram objetos por nome de coluna —
+     mesma forma que o abaPorGid devolvia, venham do proxy ou da API. */
+  function comoObjetos(linhas) {
+    const cab = ((linhas && linhas[0]) || []).map(h => String(h).trim());
+    return (linhas || []).slice(1)
+      .map(l => Object.fromEntries(cab.map((h, i) => [h, String(l[i] == null ? '' : l[i]).trim()])))
       .filter(o => Object.values(o).some(Boolean));
   }
   function pascoa(ano) {
@@ -513,7 +574,13 @@ footer .err{color:var(--muted)}
   async function lerMetasComercial(m) {
     if (!MCFG) throw new Error('configuração do painel não carregou');
     const A = MCFG.SHEET_ATENDIMENTOS, K = MCFG.SHEET_CONTRATOS;
-    const [atend, contr] = await Promise.all([abaPorGid(A.ID, A.GID), abaPorGid(K.ID, K.GID)]);
+    /* Os contratos vêm pelo proxy (fonte "clientes", aba DADOS): é o que
+       permite o FLUXO DE CLIENTES voltar a ser privado. Os atendimentos
+       seguem pela chave de API, em planilha que não faz parte desta leva. */
+    const [atend, contr] = await Promise.all([
+      abaPorGid(A.ID, A.GID),
+      lerPeloProxy('clientes').then(comoObjetos)
+    ]);
     const agora = new Date();
     const eAtual = m.mes === agora.getMonth() && m.ano === agora.getFullYear();
     const ultimo = new Date(m.ano, m.mes + 1, 0).getDate();
@@ -800,6 +867,9 @@ footer .err{color:var(--muted)}
     const segredo = await abrirCofre(cred.u, cred.s);
     PROC.SHEET_ID = segredo.SHEET_ID;
     PROC.GOOGLE_API_KEY = segredo.GOOGLE_API_KEY;
+    /* O cofre manda: se ele não abrir, o login falhou. O token do proxy é
+       derivado depois e, se falhar, só tira o proxy do caminho. */
+    TOKEN_PROXY = await derivarToken(cred.u, cred.s).catch(() => null);
     try {
       const ex = await abrirCofre(cred.u, cred.s, COFRES_EXEC);
       EXEC.SHEET_ID = ex.SHEET_ID;
