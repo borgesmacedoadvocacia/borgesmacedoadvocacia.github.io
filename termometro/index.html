@@ -1036,6 +1036,8 @@ function ligarKPIs(mapa) {
    Isto tira o endereco da vitrine. Nao fecha a planilha: ela segue aberta
    a quem tiver o link, e so o proxy (que le como gabriel@) permite fechar
    de vez - ai a leitura deixa de ser por chave de API. */
+/* Implantacao do web app do proxy, a mesma do painel do CEO. */
+const PROXY_URL = 'https://script.google.com/macros/s/AKfycbytVOChmKQ0X_WUn0a4cl8MN3sNWv7XDIaso7D479x_8IM5I5PyLQIgukF-cqteXFbdeA/exec';
 const K_PESQ = 'bm_ceo_pesq';
 function pesquisaSalva() {
   try { return localStorage.getItem(K_PESQ) || ''; } catch (e) { return ''; }
@@ -1058,6 +1060,59 @@ const LINK_FORMULARIO = 'https://docs.google.com/forms/d/e/1FAIpQLSfV0GkwT8phtjD
 
 const FILTRO = { periodo: 'tudo', mes: '', ident: 'todas', busca: '' };
 
+/* ===== LEITURA PELO PROXY =====
+   O proxy e um web app Apps Script que roda com a conta dona das planilhas.
+   Enquanto este painel le com chave de API, a planilha PRECISA continuar
+   aberta a quem tem o link - e e isso que mantem o nome e o telefone de
+   quem respondeu ao alcance de qualquer um que descubra o endereco. Pela
+   leitura do proxy o dado sai do servidor, e so entao da para fechar a
+   planilha de verdade.
+   A credencial e a MESMA do login daqui: o token sai da senha (nunca a
+   senha), pela mesma derivacao do painel do CEO, para a mesma senha valer
+   nos dois. O endereco do proxy nao e segredo - sem a senha ele responde
+   "credencial invalida" e nada mais. */
+const CHAVE_TOKEN = 'bm_termo_tok';
+let TOKEN_PROXY = null;
+let VIA_PROXY = false;
+
+async function derivarToken(usuario, senha) {
+  const enc = new TextEncoder();
+  const material = await crypto.subtle.importKey(
+    'raw', enc.encode(normUsuario(usuario) + '\n' + senha), 'PBKDF2', false, ['deriveBits']);
+  const bits = await crypto.subtle.deriveBits(
+    { name: 'PBKDF2', salt: enc.encode('bm-painel-comercial-v1'), iterations: 310000, hash: 'SHA-256' },
+    material, 256);
+  let s = '';
+  new Uint8Array(bits).forEach(b => { s += String.fromCharCode(b); });
+  return btoa(s);
+}
+
+function guardarToken(tok) {
+  TOKEN_PROXY = tok || null;
+  try {
+    if (tok) sessionStorage.setItem(CHAVE_TOKEN, tok); else sessionStorage.removeItem(CHAVE_TOKEN);
+  } catch (e) {}
+}
+
+async function lerPeloProxy(fonte) {
+  if (!TOKEN_PROXY) throw new Error('sem credencial do proxy nesta sessao');
+  /* text/plain de proposito: mantem a requisicao "simples" e evita o
+     preflight OPTIONS, que o Apps Script nao responde. */
+  const resp = await fetch(PROXY_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify({ auth: TOKEN_PROXY, fontes: [fonte] }),
+    cache: 'no-store'
+  });
+  if (!resp.ok) throw new Error('o proxy respondeu HTTP ' + resp.status);
+  const j = await resp.json();
+  if (!j.ok) throw new Error(j.erro || 'o proxy recusou a credencial');
+  if (j.erros && j.erros[fonte]) throw new Error(j.erros[fonte]);
+  const d = j.dados && j.dados[fonte];
+  if (!d || !d.linhas || !d.linhas.length) throw new Error('o proxy nao devolveu a fonte "' + fonte + '"');
+  return d.linhas;
+}
+
 /* ---------- leitura ---------- */
 async function lerAbasDe(sheetId, ranges) {
   const p = new URLSearchParams();
@@ -1071,6 +1126,18 @@ async function lerAbasDe(sheetId, ranges) {
 }
 
 async function buscarTudo() {
+  /* 1) Pelo proxy. E o unico caminho que permite a planilha ser privada,
+     entao ele vem primeiro: no dia em que o proxy conhecer a fonte
+     "pesquisa", o painel troca sozinho e o compartilhamento por link pode
+     ser desligado. */
+  try {
+    const linhas = await lerPeloProxy('pesquisa');
+    VIA_PROXY = true;
+    return montarBase(tabela(linhas));
+  } catch (e) {
+    VIA_PROXY = false;
+  }
+  /* 2) Retaguarda: chave de API, que so le planilha aberta por link. */
   const id = idPesquisa();
   if (!id) throw new Error('SEM_PLANILHA');
   const [respostas] = await lerAbasDe(id, [ABA_RESPOSTAS + '!A1:Z20000']);
@@ -1605,8 +1672,11 @@ async function carregarDados() {
     document.getElementById('carregando').classList.add('oculto');
     document.getElementById('conteudo').classList.remove('oculto');
     erroEl.classList.add('oculto');
+    /* Por qual caminho o dado veio fica a vista: e a diferenca entre a
+       planilha poder ser privada e ela precisar continuar aberta. */
     document.getElementById('atualizadoEm').textContent =
-      'Atualizado às ' + new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+      'Atualizado às ' + new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) +
+      (VIA_PROXY ? ' · pelo proxy' : ' · por link direto');
     render(DADOS);
     ULTIMA_CONCLUIDA = minhaGeracao;
   } catch (e) {
@@ -1677,9 +1747,17 @@ document.getElementById('loginForm').addEventListener('submit', async (ev) => {
   btn.disabled = true; btn.textContent = 'Verificando…';
   await new Promise(r => setTimeout(r, 30));
   try {
-    const segredo = await abrirCofre(
-      document.getElementById('campoUsuario').value,
-      document.getElementById('campoSenha').value);
+    const usuario = document.getElementById('campoUsuario').value;
+    const senha = document.getElementById('campoSenha').value;
+    /* O cofre prova a senha neste navegador; o token e o que o proxy
+       confere no servidor. Os dois saem da mesma senha, em paralelo - e se
+       a derivacao do token falhar, o painel ainda entra e le pela
+       retaguarda. */
+    const [segredo, tok] = await Promise.all([
+      abrirCofre(usuario, senha),
+      derivarToken(usuario, senha).catch(() => null)
+    ]);
+    guardarToken(tok);
     btn.textContent = 'Entrando…';
     entrarNoPainel(segredo, true);
   } catch (e) {
@@ -1692,18 +1770,27 @@ document.getElementById('loginForm').addEventListener('submit', async (ev) => {
 });
 
 document.getElementById('btnSair').addEventListener('click', () => {
-  try { sessionStorage.removeItem(CHAVE_SESSAO); } catch (e) {}
+  try { sessionStorage.removeItem(CHAVE_SESSAO); sessionStorage.removeItem(CHAVE_TOKEN); } catch (e) {}
   location.reload();
 });
 
 (async function iniciar() {
   let salvo = null;
+  try { TOKEN_PROXY = sessionStorage.getItem(CHAVE_TOKEN) || null; } catch (e) {}
   try { salvo = sessionStorage.getItem(CHAVE_SESSAO); } catch (e) {}
   if (salvo) { try { entrarNoPainel(JSON.parse(salvo), false); return; } catch (e) {} }
   let cred = null;
   try { cred = JSON.parse(sessionStorage.getItem('bm_portal_cred') || 'null'); } catch (e) {}
   if (cred && cred.u != null && cred.s != null) {
-    try { entrarNoPainel(await abrirCofre(cred.u, cred.s), true); return; } catch (e) {}
+    try {
+      const [segredo, tok] = await Promise.all([
+        abrirCofre(cred.u, cred.s),
+        derivarToken(cred.u, cred.s).catch(() => null)
+      ]);
+      guardarToken(tok);
+      entrarNoPainel(segredo, true);
+      return;
+    } catch (e) {}
   }
   document.getElementById('campoUsuario').focus();
 })();
