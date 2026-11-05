@@ -660,7 +660,7 @@ async function abrirCofre(usuario, senha) {
   throw new Error('credenciais sem acesso a este painel');
 }
 
-const CONFIG = { SHEET_ID: null, GOOGLE_API_KEY: null, AUTO_REFRESH_MIN: 5 };
+const CONFIG = { SHEET_ID: null, GOOGLE_API_KEY: null, SHEET_PESQUISA: null, AUTO_REFRESH_MIN: 5 };
 
 /* ===== utilitários comuns ===== */
 const fmtBRL = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -1020,7 +1020,39 @@ function ligarKPIs(mapa) {
 /* O ID da planilha não é segredo (ela é compartilhada por link); o que o
    cofre protege é a chave da API. Fica aqui no código para o painel não
    depender do que estava na sessão de quando a pessoa entrou. */
-const SHEET_PESQUISA = '1aucxxPz_EZbHdK7Xt0bDgH2s8-IS9YGUWD_H24FdW5E';
+/* ===== O ENDERECO DA PLANILHA SAIU DA PAGINA =====
+   Ele estava aqui em texto puro, e esta pagina e publica: quem abrisse o
+   codigo-fonte tinha o endereco da planilha de respostas - com nome e
+   telefone de quem respondeu - sem senha nenhuma. O cofre deste painel ja
+   cifrava a chave da API e a outra planilha; esta tinha ficado de fora.
+
+   Agora o endereco vem, nesta ordem:
+     1. do cofre, como SHEET_PESQUISA, assim que ele for regerado com ela -
+        e o certo, porque vale para todo mundo que entra;
+     2. do que alguem colar uma vez neste navegador. A chave e a MESMA do
+        painel do CEO e os dois estao no mesmo dominio, entao colar num
+        deles serve para os dois.
+
+   Isto tira o endereco da vitrine. Nao fecha a planilha: ela segue aberta
+   a quem tiver o link, e so o proxy (que le como gabriel@) permite fechar
+   de vez - ai a leitura deixa de ser por chave de API. */
+const K_PESQ = 'bm_ceo_pesq';
+function pesquisaSalva() {
+  try { return localStorage.getItem(K_PESQ) || ''; } catch (e) { return ''; }
+}
+function salvarPesquisa(v) {
+  /* Aceita o link inteiro da planilha ou so o ID. Texto que nao e nenhum
+     dos dois NAO apaga o que ja estava guardado: so o campo vazio esquece.
+     Um erro de digitacao nao pode derrubar o que ja funcionava. */
+  const txt = String(v || '').trim();
+  const m = txt.match(/[-\w]{25,}/);
+  try {
+    if (m) localStorage.setItem(K_PESQ, m[0]);
+    else if (!txt) localStorage.removeItem(K_PESQ);
+  } catch (e) {}
+  return m ? m[0] : '';
+}
+function idPesquisa() { return CONFIG.SHEET_PESQUISA || pesquisaSalva(); }
 const ABA_RESPOSTAS = "'Respostas'";
 const LINK_FORMULARIO = 'https://docs.google.com/forms/d/e/1FAIpQLSfV0GkwT8phtjDRNPtTcm0a70MiPXZeEKLfB8yAFxIQQ9HWJQ/viewform';
 
@@ -1039,7 +1071,9 @@ async function lerAbasDe(sheetId, ranges) {
 }
 
 async function buscarTudo() {
-  const [respostas] = await lerAbasDe(SHEET_PESQUISA, [ABA_RESPOSTAS + '!A1:Z20000']);
+  const id = idPesquisa();
+  if (!id) throw new Error('SEM_PLANILHA');
+  const [respostas] = await lerAbasDe(id, [ABA_RESPOSTAS + '!A1:Z20000']);
   return montarBase(tabela(respostas || []));
 }
 
@@ -1562,9 +1596,9 @@ async function carregarDados() {
     const dados = await buscarTudo();
     if (minhaGeracao !== GERACAO_CARGA) return;   // outra carga começou depois
     DADOS = dados;
-    /* O cofre é o mesmo dos outros painéis (o que ele guarda de valioso é a
-       chave da API); a planilha deste painel é outra e está no código. */
-    const idLink = SHEET_PESQUISA;
+    /* O cofre é o mesmo dos outros painéis. A planilha deste painel é outra
+       e já não está no código: vem do cofre ou do que foi colado aqui. */
+    const idLink = idPesquisa();
     const linkEl = document.getElementById('linkPlanilha');
     if (idLink) linkEl.href = 'https://docs.google.com/spreadsheets/d/' + idLink + '/edit';
     else linkEl.style.display = 'none';
@@ -1580,6 +1614,32 @@ async function carregarDados() {
     console.error(e);
     document.getElementById('carregando').classList.add('oculto');
     erroEl.classList.remove('oculto');
+    if (e.message === 'SEM_PLANILHA') {
+      /* Nao e falha de leitura: o painel so nao sabe ainda QUAL planilha ler,
+         porque o endereco saiu do codigo. Pedir e melhor do que adivinhar. */
+      erroEl.innerHTML = '<b>Falta dizer qual é a planilha de respostas.</b>' +
+        '<br>O endereço dela saiu do código desta página, que é pública &mdash; quem abrisse o ' +
+        'código-fonte tinha o caminho para os nomes e telefones de quem respondeu.' +
+        '<br>Cole o link da planilha aqui: ele fica guardado <b>neste navegador</b> e serve também para o ' +
+        'painel do CEO. Para valer para todo mundo, a planilha precisa entrar no cofre como ' +
+        '<code>SHEET_PESQUISA</code>.' +
+        '<div style="display:flex;gap:.5rem;margin-top:.8rem;flex-wrap:wrap">' +
+        '<input type="text" id="pesqId" style="flex:1;min-width:240px" ' +
+        'placeholder="cole aqui o link da planilha de respostas…" value="' + esc(pesquisaSalva()) + '">' +
+        '<button type="button" id="pesqSalvar">Usar esta planilha</button></div>';
+      const btn = document.getElementById('pesqSalvar');
+      if (btn) btn.addEventListener('click', () => {
+        const campo = document.getElementById('pesqId');
+        if (!salvarPesquisa(campo ? campo.value : '')) {
+          alert('Não reconheci uma planilha nesse texto. Cole o link inteiro da planilha de respostas.');
+          return;
+        }
+        erroEl.classList.add('oculto');
+        document.getElementById('carregando').classList.remove('oculto');
+        carregarDados();
+      });
+      return;
+    }
     erroEl.innerHTML = '<b>Não foi possível carregar a planilha.</b><br>' + e.message +
       '<br>Verifique se a planilha continua compartilhada como <b>"qualquer pessoa com o link pode ver"</b>.' +
       ' Nova tentativa automática em ' + CONFIG.AUTO_REFRESH_MIN + ' min.';
