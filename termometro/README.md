@@ -26,6 +26,18 @@ neutro = **50**, satisfeito = 75, muito satisfeito = 100. É a média dessa conv
 no cartão **Termômetro geral** (sobre a pergunta de satisfação geral) e em cada linha de
 **Termômetro por dimensão**. Verde a partir de 75, amarelo de 50 a 74, vermelho abaixo de 50.
 
+## Os filtros
+
+Dois filtros, que se combinam e valem para a página inteira:
+
+- **Período**: desde o início, 30 dias, 90 dias, este ano, ou um mês.
+- **Quem respondeu**: todas as respostas · só quem se identificou · só anônimas. Conta como
+  **identificada** a resposta que trouxe **nome ou telefone** — é o que permite dar retorno.
+  Quem marcou *sim* na pergunta e deixou os dois campos em branco segue como anônima.
+
+O gráfico de **Evolução** ignora o período de propósito (mostra a série inteira), mas obedece ao
+filtro de quem respondeu — é assim que se compara a nota dos dois grupos mês a mês.
+
 ## O que o painel mostra
 
 - **Resumo**: respostas, termômetro geral, satisfeitos (nota 4–5), insatisfeitos (1–2),
@@ -56,13 +68,8 @@ Todo cartão, barra e linha abre a lista das respostas por trás do número.
 ## Estrutura
 
 ```
-termometro/index.html    painel completo (cofres, leitura via Sheets API v4, gráficos Chart.js)
+index.html    painel completo (cofres, leitura via Sheets API v4, gráficos Chart.js)
 ```
-
-Mora **dentro do repositório da Central**, e não em repositório próprio como os outros painéis,
-porque criar repositório público está vetado para o agente na sessão em que isto foi feito. A
-pasta é autocontida: para virar repositório próprio um dia, é só movê-la e trocar a URL em
-`index.html` da Central.
 
 Publicação: GitHub Pages via Actions (`.github/workflows/pages.yml`), a cada push em `main`.
 Atualização automática a cada 5 minutos enquanto a aba estiver aberta.

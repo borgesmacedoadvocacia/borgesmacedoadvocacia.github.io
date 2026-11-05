@@ -437,7 +437,7 @@
   /* ── filtros de mês/produto (multi-seleção) ── */
   .filtro-linha { display:flex; gap:.7rem; align-items:flex-start; flex-wrap:wrap; margin-bottom:.4rem; }
   .filtro-rotulo { font-size:.7rem; text-transform:uppercase; letter-spacing:.07em; color:var(--texto-muted);
-                   min-width:62px; padding-top:.5rem; }
+                   min-width:104px; padding-top:.5rem; }
   .filtro-campo { display:flex; align-items:center; gap:.4rem; font-size:.78rem; color:var(--texto-muted); }
   .filtro-campo .campo-texto { width:auto; min-width:70px; max-width:90px; padding:.35rem .5rem; font-size:.85rem; text-align:right; }
   .chip.multi.ativo::before { content:'\2713\00a0'; font-size:.75em; }
@@ -530,11 +530,20 @@
         </label>
       </div>
     </div>
+    <div class="filtro-linha">
+      <span class="filtro-rotulo">Quem respondeu</span>
+      <div class="filtros" id="filtrosIdent">
+        <button type="button" class="chip ativo" data-ident="todas">Todas as respostas</button>
+        <button type="button" class="chip" data-ident="identificadas">Só quem se identificou</button>
+        <button type="button" class="chip" data-ident="anonimas">Só anônimas</button>
+      </div>
+    </div>
     <div class="secao-sub" id="subPeriodo">&mdash;</div>
     <div class="secao-sub nota-regra">Base: a planilha de respostas do formulário <b>Pesquisa de Satisfação | BM Advocacia</b>, lida em tempo real.
       As cinco perguntas de satisfação vão de <b>Muito insatisfeito</b> a <b>Muito satisfeito</b>; o <b>termômetro</b> converte essa escala
       numa nota de <b>0 a 100</b> (muito insatisfeito = 0, neutro = 50, muito satisfeito = 100). Clique em qualquer cartão, barra ou linha
-      para ler as respostas por trás do número.</div>
+      para ler as respostas por trás do número. Identificar-se é opcional: conta como <b>identificada</b> a resposta que trouxe
+      <b>nome ou telefone</b> — é o que permite dar retorno. Os dois filtros se combinam.</div>
   </section>
 
   <section class="secao">
@@ -1015,7 +1024,7 @@ const SHEET_PESQUISA = '1aucxxPz_EZbHdK7Xt0bDgH2s8-IS9YGUWD_H24FdW5E';
 const ABA_RESPOSTAS = "'Respostas'";
 const LINK_FORMULARIO = 'https://docs.google.com/forms/d/e/1FAIpQLSfV0GkwT8phtjDRNPtTcm0a70MiPXZeEKLfB8yAFxIQQ9HWJQ/viewform';
 
-const FILTRO = { periodo: 'tudo', mes: '', busca: '' };
+const FILTRO = { periodo: 'tudo', mes: '', ident: 'todas', busca: '' };
 
 /* ---------- leitura ---------- */
 async function lerAbasDe(sheetId, ranges) {
@@ -1176,6 +1185,16 @@ function noRecorte(r, per) {
   return true;
 }
 
+/* Identificar-se é opcional no formulário. Vale como identificada a resposta
+   que trouxe nome ou telefone — é o que permite dar retorno. Quem marcou
+   "sim" na pergunta e deixou os dois campos em branco segue como anônima,
+   porque na prática não há como procurar essa pessoa. */
+const ROTULO_IDENT = { todas: 'todas as respostas', identificadas: 'só quem se identificou', anonimas: 'só anônimas' };
+const noIdent = r => FILTRO.ident === 'todas' || (FILTRO.ident === 'identificadas' ? r.identificado : !r.identificado);
+
+/* Os dois filtros se combinam; tudo o que desenha a tela parte daqui. */
+const recorte = base => base.respostas.filter(r => noRecorte(r, periodoAtual()) && noIdent(r));
+
 const media = arr => arr.length ? arr.reduce((s, v) => s + v, 0) / arr.length : null;
 const pct = (n, total) => total ? n / total * 100 : null;
 
@@ -1237,14 +1256,16 @@ let controlesProntos = false;
 function render(base) {
   if (!controlesProntos) { montarControles(base); controlesProntos = true; }
   const per = periodoAtual();
-  const sel = base.respostas.filter(r => noRecorte(r, per));
+  const sel = recorte(base);
   renderSub(base, sel, per);
   renderKPIs(sel);
   renderDimensoes(sel);
   renderLealdade(sel);
   renderAtencao(sel);
   renderComentarios(sel);
-  renderEvolucao(base);
+  /* A evolução ignora o período de propósito (é a série inteira), mas
+     obedece ao filtro de quem respondeu. */
+  renderEvolucao(base.respostas.filter(noIdent));
   renderObs(base, sel);
 }
 
@@ -1264,8 +1285,15 @@ function montarControles(base) {
     marcarChip(box, b);
     if (DADOS) render(DADOS);
   });
+  const boxId = document.getElementById('filtrosIdent');
+  boxId.addEventListener('click', ev => {
+    const b = ev.target.closest('.chip'); if (!b) return;
+    FILTRO.ident = b.dataset.ident;
+    marcarChip(boxId, b);
+    if (DADOS) render(DADOS);
+  });
   document.getElementById('buscaCampo').innerHTML = campoBusca('inputBusca', 'Procurar nos comentários…');
-  ligarBusca('inputBusca', v => { FILTRO.busca = v; if (DADOS) renderComentarios(DADOS.respostas.filter(r => noRecorte(r, periodoAtual()))); });
+  ligarBusca('inputBusca', v => { FILTRO.busca = v; if (DADOS) renderComentarios(recorte(DADOS)); });
 }
 
 function marcarChip(box, ativo) {
@@ -1273,11 +1301,12 @@ function marcarChip(box, ativo) {
 }
 
 function renderSub(base, sel, per) {
-  const ident = sel.filter(r => r.identificado).length;
-  document.getElementById('subPeriodo').innerHTML =
-    'Recorte: <b>' + esc(per.rotulo) + '</b> · <b>' + num(sel.length) + '</b> resposta(s) de <b>' +
-    num(base.respostas.length) + '</b> recebidas · <b>' + num(ident) + '</b> se identificaram' +
-    (base.semData ? ' · ' + num(base.semData) + ' sem carimbo de data' : '');
+  const partes = ['Recorte: <b>' + esc(per.rotulo) + '</b>'];
+  if (FILTRO.ident !== 'todas') partes.push('<b>' + ROTULO_IDENT[FILTRO.ident] + '</b>');
+  partes.push('<b>' + num(sel.length) + '</b> resposta(s) de <b>' + num(base.respostas.length) + '</b> recebidas');
+  if (FILTRO.ident === 'todas') partes.push('<b>' + num(sel.filter(r => r.identificado).length) + '</b> se identificaram');
+  if (base.semData) partes.push(num(base.semData) + ' sem carimbo de data');
+  document.getElementById('subPeriodo').innerHTML = partes.join(' · ');
 }
 
 function renderKPIs(sel) {
@@ -1296,7 +1325,10 @@ function renderKPIs(sel) {
 
   document.getElementById('kpis').innerHTML = [
     cartaoKPI('Respostas', num(total), 'azul',
-      '<span>' + num(sel.filter(r => r.identificado).length) + ' identificadas</span>'),
+      '<span>' + (FILTRO.ident === 'todas'
+        ? num(sel.filter(r => r.identificado).length) + ' identificadas · ' +
+          num(sel.filter(r => !r.identificado).length) + ' anônimas'
+        : ROTULO_IDENT[FILTRO.ident]) + '</span>'),
     cartaoKPI('Termômetro geral', t === null ? '—' : Math.round(t) + '<span style="font-size:1rem">/100</span>',
       corTermometro(t), '<span>' + (mGeral === null ? 'ainda sem nota' : 'nota média ' + mGeral.toFixed(1).replace('.', ',') + ' de 5') + '</span>'),
     cartaoKPI('Satisfeitos', num(satisfeitos), 'verde',
@@ -1312,7 +1344,9 @@ function renderKPIs(sel) {
   ].join('');
 
   ligarKPIs({
-    0: () => listaRespostas('Todas as respostas do período', sel),
+    0: () => listaRespostas(FILTRO.ident === 'todas'
+      ? 'Todas as respostas do período'
+      : 'Respostas do período · ' + ROTULO_IDENT[FILTRO.ident], sel),
     1: () => listaRespostas('Respostas com nota de satisfação geral', sel.filter(r => r.geral !== null)),
     2: () => listaRespostas('Clientes satisfeitos', sel.filter(r => r.geral >= 4)),
     3: () => listaRespostas('Clientes insatisfeitos', sel.filter(r => r.geral !== null && r.geral <= 2),
@@ -1421,9 +1455,9 @@ function renderComentarios(sel) {
   monta('melhorar', 'melhorar', 'qtdMelhorar', 'atencao');
 }
 
-function renderEvolucao(base) {
+function renderEvolucao(todas) {
   const porMes = {};
-  base.respostas.filter(r => r.data && r.geral !== null).forEach(r => {
+  todas.filter(r => r.data && r.geral !== null).forEach(r => {
     const k = chaveMes(r.data);
     (porMes[k] = porMes[k] || { mes: k, notas: [] }).notas.push(r.geral);
   });
@@ -1460,6 +1494,14 @@ function renderObs(base, sel) {
     return;
   }
 
+  if (!sel.length) {
+    obs.push(obsCard('info', '&#128269;', 'Nenhuma resposta neste recorte',
+      'A pesquisa tem <b>' + num(base.respostas.length) + '</b> resposta(s), mas nenhuma cabe ao mesmo tempo no período ' +
+      'e no filtro <b>' + ROTULO_IDENT[FILTRO.ident] + '</b>. Abra o período ou volte para <b>todas as respostas</b>.'));
+    document.getElementById('obs').innerHTML = obs.join('');
+    return;
+  }
+
   const gerais = sel.map(r => r.geral).filter(v => v !== null);
   const t = termometro(media(gerais));
   const insatisfeitos = sel.filter(r => r.pior !== null && r.pior <= 2);
@@ -1470,7 +1512,7 @@ function renderObs(base, sel) {
     'Marcaram <b>insatisfeito</b> ou <b>muito insatisfeito</b> em <b>alguma</b> pergunta, ou disseram que não indicariam — ' +
     'por isso é um número maior que o do cartão <b>Insatisfeitos</b>, que olha só a nota geral. ' +
     (anonimos ? '<b>' + num(anonimos) + '</b> não se identificaram, então não dá para procurar — o resto está na tabela acima com telefone. '
-              : 'Todas se identificaram: dá para ligar para cada uma. ') +
+              : 'Todas as deste recorte se identificaram: dá para ligar para cada uma. ') +
     'A pior dimensão de cada uma está na coluna <b>Pior nota</b>.'));
 
   /* Qual dimensão puxa a nota para baixo. */
@@ -1491,9 +1533,12 @@ function renderObs(base, sel) {
   if (sel.length >= 5 && !naoIndicam && t !== null && t >= 75) obs.push(obsCard('bom', '&#10004;', 'Relacionamento saudável no período',
     'Termômetro geral em <b>' + Math.round(t) + '/100</b> e ninguém disse que não indicaria o escritório.'));
 
+  /* Com o filtro "só anônimas" ou "só identificadas" este cartão viraria
+     100% ou 0% — não diz nada. Só vale sobre a base inteira do período. */
   const semIdent = sel.filter(r => !r.identificado).length;
-  if (semIdent) obs.push(obsCard('info', '&#128100;', num(semIdent) + ' resposta(s) anônima(s)',
-    'São <b>' + pct1(pct(semIdent, sel.length)) + '</b> do período. Contam nas notas, mas não dá para dar retorno a quem respondeu.'));
+  if (semIdent && FILTRO.ident === 'todas') obs.push(obsCard('info', '&#128100;', num(semIdent) + ' resposta(s) anônima(s)',
+    'São <b>' + pct1(pct(semIdent, sel.length)) + '</b> do período. Contam nas notas, mas não dá para dar retorno a quem respondeu. ' +
+    'Para comparar as notas dos dois grupos, use o filtro <b>Quem respondeu</b> no alto da página.'));
 
   document.getElementById('obs').innerHTML = obs.join('') || '<div class="obs-vazio">Nenhum ponto de atenção no recorte.</div>';
 }
