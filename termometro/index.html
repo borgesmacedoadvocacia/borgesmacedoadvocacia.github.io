@@ -1126,10 +1126,9 @@ async function lerAbasDe(sheetId, ranges) {
 }
 
 async function buscarTudo() {
-  /* 1) Pelo proxy. E o unico caminho que permite a planilha ser privada,
-     entao ele vem primeiro: no dia em que o proxy conhecer a fonte
-     "pesquisa", o painel troca sozinho e o compartilhamento por link pode
-     ser desligado. */
+  /* 1) Pelo proxy. Desde 05/11/2026 e o unico caminho que funciona: a
+     planilha da pesquisa voltou a ser privada, e so o proxy, que roda com a
+     permissao do dono dela, consegue le-la. */
   try {
     const linhas = await lerPeloProxy('pesquisa');
     VIA_PROXY = true;
@@ -1137,7 +1136,9 @@ async function buscarTudo() {
   } catch (e) {
     VIA_PROXY = false;
   }
-  /* 2) Retaguarda: chave de API, que so le planilha aberta por link. */
+  /* 2) Retaguarda: chave de API, que so le planilha aberta por link. Com a
+     planilha privada isso responde 401 — fica aqui para o caso de alguem
+     reabrir o compartilhamento, nao como rede de seguranca. */
   const id = idPesquisa();
   if (!id) throw new Error('SEM_PLANILHA');
   const [respostas] = await lerAbasDe(id, [ABA_RESPOSTAS + '!A1:Z20000']);
