@@ -276,6 +276,7 @@ footer .err{color:var(--muted)}
      segredo — sem a senha ele responde "credencial inválida" e nada mais. */
   const PROXY_URL = 'https://script.google.com/macros/s/AKfycbytVOChmKQ0X_WUn0a4cl8MN3sNWv7XDIaso7D479x_8IM5I5PyLQIgukF-cqteXFbdeA/exec';
   let TOKEN_PROXY = null;
+  let PROXY_RECUSOU = null;
 
   async function derivarToken(usuario, senha) {
     const enc = new TextEncoder();
@@ -290,6 +291,7 @@ footer .err{color:var(--muted)}
   }
 
   async function lerPeloProxy(fonte) {
+    if (PROXY_RECUSOU) throw new Error(PROXY_RECUSOU);
     if (!TOKEN_PROXY) throw new Error('sem credencial do proxy nesta sessão');
     /* text/plain de propósito: mantém a requisição "simples" e evita o
        preflight OPTIONS, que o Apps Script não responde. */
@@ -301,7 +303,13 @@ footer .err{color:var(--muted)}
     });
     if (!resp.ok) throw new Error('o proxy respondeu HTTP ' + resp.status);
     const j = await resp.json();
-    if (!j.ok) throw new Error(j.erro || 'o proxy recusou a credencial');
+    if (!j.ok) {
+      /* Recusa de senha é definitiva nesta sessão: o proxy trava TODOS os
+         painéis (CEO, Termômetro) após 8 erros em 10 min, e a TV sozinha
+         faria isso em minutos se continuasse tentando a cada atualização. */
+      if (/credencial|tentativas/i.test(j.erro || '')) PROXY_RECUSOU = 'proxy: ' + j.erro + ' (a TV parou de tentar; recarregue após corrigir)';
+      throw new Error(j.erro || 'o proxy recusou a credencial');
+    }
     if (j.erros && j.erros[fonte]) throw new Error(j.erros[fonte]);
     const d = j.dados && j.dados[fonte];
     if (!d || !d.linhas || !d.linhas.length) throw new Error('aba do mês não encontrada');
@@ -428,7 +436,28 @@ footer .err{color:var(--muted)}
     for (const [nome, [rr, gg, bb]] of Object.entries(COR_REF)) { const d = (r-rr)**2 + (g-gg)**2 + (b-bb)**2; if (d < menor) { menor = d; melhor = nome; } }
     return melhor;
   }
+  /* A partir de novembro/2026 o Processual vem da planilha "Metas e Resultados -
+     Processual [NOVA]", aba "Processual - Novembro 2026". Layout: coluna C =
+     "Resultados Chaves" (nome da linha), D = Meta Mensal, E = Meta Proporcional,
+     F = Resultado do Mês, G = Res. Mensal x Meta Proporcional. */
+  const PROC_NOVO_ID = '16hJFQ5Upo-vR4eAqCWEwyRRgmEkZoo6diauT-uawGb4';
+  const usaProcNovo = m => m.ano * 12 + m.mes >= 2026 * 12 + 10;
+  async function lerProcNovo(m) {
+    const g = await getCSV(`https://docs.google.com/spreadsheets/d/${PROC_NOVO_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(`Processual - ${MESES[m.mes]} ${m.ano}`)}`);
+    // Aba inexistente: o gviz devolve a primeira aba; o título tem de citar o mês pedido
+    if (!norm((g[0] || []).join(' ')).includes(norm(`${MESES[m.mes]} ${m.ano}`))) throw new Error('aba do mês não encontrada');
+    const L = {};
+    g.slice(1).forEach(r => {
+      const nome = String(r[2] || '').trim();
+      if (!nome) return;
+      L[norm(nome)] = { nome, res: num(r[5]), meta: num(r[3]), metaProp: num(r[4]), pct: num(r[6]), money: /R\$/.test(r[3] + r[5]) };
+    });
+    if (!Object.keys(L).length) throw new Error('aba do mês ainda vazia');
+    return L;
+  }
+
   async function lerProcessual(m) {
+    if (usaProcNovo(m)) { const L = await lerProcNovo(m); return { novo: true, L, linhas: Object.values(L), dias: {} }; }
     const aba = PROC.ABA_PREFIXO + MESES[m.mes] + '/' + m.ano;
     let g;
     try {
@@ -604,6 +633,17 @@ footer .err{color:var(--muted)}
      As linhas "- Dir. Bancário" ficam de fora: são outro produto e não têm meta. */
   const EXITO_ID = '1JpfoE6EpMMRb-DBnwBtVVaJzkL9USr1YzZ9n4qMCQP0';
   async function lerExito(m) {
+    if (usaProcNovo(m)) {
+      /* Planilha nova: procedentes ÷ (procedentes + improcedentes), somando
+         sentenças e recursos de mérito; meta = a da linha "Sentenças - taxa de êxito (%)". */
+      const L = await lerProcNovo(m);
+      const v = nome => { const l = L[norm(nome)]; if (!l) throw new Error(`linha "${nome}" não encontrada`); return l.res || 0; };
+      const sentProc = v('Sentenças Procedentes'), sentImp = v('Sentenças Improcedentes');
+      const recPos = v('Recursos de Mérito Procedentes'), recImp = v('Recursos de Mérito Improcedentes');
+      const sent = sentProc + sentImp, rec = recPos + recImp, total = sent + rec, proc = sentProc + recPos;
+      const metaL = L[norm('Sentenças - taxa de êxito (%)')];
+      return { sent, sentProc, rec, recPos, total, proc, taxa: total > 0 ? proc / total * 100 : null, meta: metaL ? metaL.meta : null };
+    }
     const g = await getCSV(`https://docs.google.com/spreadsheets/d/${EXITO_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(PROC.ABA_PREFIXO + MESES[m.mes] + '/' + m.ano)}`);
     if (norm(g[0] && g[0][0]) !== 'metrica') throw new Error('aba do mês não encontrada');
     const L = {};
@@ -771,7 +811,17 @@ footer .err{color:var(--muted)}
     // ----- Processual -----
     const pErr = semFonte(erros.proc, 'Metas e Resultados - Processual');
     const P = dados.proc ? dados.proc.linhas : null;
-    const pk = c => P ? acharProc(P, c) : null;
+    // Planilha nova (nov/2026 em diante): nomes fixos das linhas
+    const NOVO = { alvaras: 'Alvarás e Acordos Creditados', honorarios: 'Honorários de Êxito', acoes: 'Petições Iniciais Distribuídas' };
+    const pk = c => {
+      if (!P) return null;
+      if (!dados.proc.novo) return acharProc(P, c);
+      if (c === 'sentencas') {
+        const a = dados.proc.L[norm('Sentenças Procedentes')], b = dados.proc.L[norm('Sentenças Improcedentes')];
+        return a || b ? { res: ((a && a.res) || 0) + ((b && b.res) || 0), nome: 'Sentenças Procedentes + Improcedentes' } : null;
+      }
+      return NOVO[c] ? dados.proc.L[norm(NOVO[c])] || null : null;
+    };
     const falta = c => pErr || (P ? 'Linha não encontrada na planilha do mês' : 'Carregando…');
     const E = dados.exito;
     const eFalta = erros.exito ? 'Resultados Gerais: ' + erros.exito.message : 'Carregando…';
@@ -782,7 +832,7 @@ footer .err{color:var(--muted)}
       ${receberTile()}
       ${tile('t-half', 'Ações distribuídas', aco, 'n', '', falta())}
       ${tile('t-half', 'Sentenças e recursos', pk('sentencas'), 'n', '', falta())}
-      ${ring('Taxa de êxito', E ? { res: E.taxa, nome: 'procedências ÷ sentenças e recursos' } : null,
+      ${ring('Taxa de êxito', E ? { res: E.taxa, meta: E.meta, metaProp: E.meta, nome: 'procedências ÷ sentenças e recursos' } : null,
         E ? `${fmt(E.proc, 'n')} favoráveis de ${fmt(E.total, 'n')} · ${fmt(E.sentProc, 'n')} procedências + ${fmt(E.recPos, 'n')} recursos providos` : '', eFalta)}
       ${ring('Cumprimento de diligências', D ? { res: D.res, nome: D.nome } : null,
         D ? `${nf.format(D.cumpridas)} cumpridas de ${nf.format(D.total)} · ${nf.format(D.standby)} em Standy By fora da conta · posição atual` : '',
