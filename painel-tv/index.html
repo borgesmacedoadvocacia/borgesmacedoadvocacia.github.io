@@ -382,7 +382,46 @@ footer .err{color:var(--muted)}
      de outro ano leria a aba do ano errado sem dar erro, então isso é
      barrado aqui: fora do ano corrente, a tela mostra "aba do mês não
      encontrada", que é o aviso que ela já sabe exibir. */
+  /* Desde 09/11/2026 o Comercial inteiro vem das abas "KPIS <Mês>" da planilha
+     "Metas e Resultados - Comercial [NOVA]" (aberta por link; existem de set/2026
+     em diante). Layout: C = nome da linha, D = meta mensal, E = meta proporcional,
+     F = resultado, G = % da meta proporcional. Nas últimas linhas, coluna H:
+     data da atualização, dias do mês e dias contados. O nome da aba não tem ano,
+     então o título (linha 1) precisa citar mês e ano pedidos. */
+  const COM_NOVO_ID = '1BMMhLTsh2lx38v1xxdwD4BFC7lVTM2-D-kR7327hlFE';
+  const usaComNovo = m => m.ano * 12 + m.mes >= 2026 * 12 + 8;
+  const _cacheCom = {};
+  function lerComNovo(m) {
+    const k = m.ano + '-' + m.mes;
+    if (!_cacheCom[k] || Date.now() - _cacheCom[k].t > 60000) _cacheCom[k] = { t: Date.now(), p: (async () => {
+      const g = await getCSV(`https://docs.google.com/spreadsheets/d/${COM_NOVO_ID}/gviz/tq?tqx=out:csv&headers=0&sheet=${encodeURIComponent('KPIS ' + MESES[m.mes])}`);
+      if (!norm((g[0] || []).join(' ')).includes(norm(`${MESES[m.mes]} ${m.ano}`))) throw new Error('aba do mês não encontrada');
+      const L = {};
+      g.forEach(r => {
+        const nome = norm(r[2]);
+        if (nome && !L[nome]) L[nome] = { nome: String(r[2]).trim(), meta: num(r[3]), metaProp: num(r[4]), res: num(r[5]), pct: num(r[6]) };
+      });
+      const pega = nome => L[norm(nome)] || null;
+      const rodape = g.filter(r => r.slice(0, 7).every(c => !String(c).trim()) && String(r[7] || '').trim()).map(r => String(r[7]).trim());
+      const dias = rodape.length >= 3 ? { cont: num(rodape[2]), total: num(rodape[1]), corridos: true } : null;
+      if (!pega('Clientes')) throw new Error('aba do mês ainda vazia');
+      return {
+        leads: pega('Novos Leads (Meta Ads + Orgânico + Parcerias)'),
+        diagnosticos: pega('Diagnósticos (Cálculos)'),
+        reunioes: pega('Reuniões Realizadas'),
+        clientes: pega('Clientes'),
+        faturamento: pega('Honorários Iniciais'),
+        convReuniao: pega('Conversão em Reunião [Automático]'),
+        convVendas: pega('Conversão em Vendas [Automático]'),
+        dias,
+      };
+    })() };
+    _cacheCom[k].p.catch(() => { delete _cacheCom[k]; });
+    return _cacheCom[k].p;
+  }
+
   async function lerFunil(m) {
+    if (usaComNovo(m)) return lerComNovo(m);
     const chave = MES_CHAVE[m.mes];
     /* "prodAtual" e "prodAnterior" existem com certeza no proxy publicado (aba
        "Produtos Jurídicos - Mmm/AAAA" do mês corrente e do anterior); as
@@ -597,6 +636,7 @@ footer .err{color:var(--muted)}
   const dataBR = s => { const p = String(s || '').trim().split('/'); if (p.length !== 3) return null; const d = new Date(+p[2], +p[1] - 1, +p[0]); return isNaN(d) ? null : d; };
   const brlDash = s => parseFloat(String(s || '').replace(/[^\d,]/g, '').replace(',', '.')) || 0;
   async function lerMetasComercial(m) {
+    if (usaComNovo(m)) return lerComNovo(m);
     if (!MCFG) throw new Error('configuração do painel não carregou');
     const A = MCFG.SHEET_ATENDIMENTOS, K = MCFG.SHEET_CONTRATOS;
     /* As duas vêm pelo proxy: "atend" é a aba Fluxo de Atendimentos da
@@ -767,7 +807,7 @@ footer .err{color:var(--muted)}
     const dc = dados.mc && dados.mc.dias, dp = dados.proc && dados.proc.dias;
     const ok = d => d && d.cont != null && d.total != null;
     $('dias').textContent = [
-      ok(dc) ? `Comercial: dia útil ${nf.format(dc.cont)} de ${nf.format(dc.total)}` : '',
+      ok(dc) ? `Comercial: ${dc.corridos ? 'dia' : 'dia útil'} ${nf.format(dc.cont)} de ${nf.format(dc.total)}` : '',
       ok(dp) ? `Processual: dia útil ${nf.format(dp.cont)} de ${nf.format(dp.total)}` : '',
     ].filter(Boolean).join(' · ');
 
@@ -782,7 +822,9 @@ footer .err{color:var(--muted)}
     const reun = MC && MC.reunioes, cli = MC && MC.clientes;
     const txLR = leads && reun && leads.res > 0 ? reun.res / leads.res * 100 : null;
     const txRC = reun && cli && reun.res > 0 ? cli.res / reun.res * 100 : null;
-    const metaLR = kl('tx. de conversao (leads x reunioes)'), metaRC = kl('tx. de conversao (reuniao x clientes)');
+    // Metas das conversões: as da aba KPIS quando existe; senão, as da planilha "KPIs do Comercial"
+    const metaLR = (MC && MC.convReuniao) || kl('tx. de conversao (leads x reunioes)');
+    const metaRC = (MC && MC.convVendas) || kl('tx. de conversao (reuniao x clientes)');
     // Barra de meta igual à dos quadros: a trilha inteira é a meta do mês, o traço
     // marca a meta proporcional e a cor segue o % da meta proporcional
     const fBar = k => {
