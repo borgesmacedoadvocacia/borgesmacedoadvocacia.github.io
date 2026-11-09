@@ -383,9 +383,15 @@ footer .err{color:var(--muted)}
      barrado aqui: fora do ano corrente, a tela mostra "aba do mês não
      encontrada", que é o aviso que ela já sabe exibir. */
   async function lerFunil(m) {
-    if (m.ano !== new Date().getFullYear()) throw new Error('aba do mês não encontrada');
     const chave = MES_CHAVE[m.mes];
-    const tentativas = ['prodNova' + chave, 'revSaude' + chave, 'prodAntiga' + chave];
+    /* "prodAtual" e "prodAnterior" existem com certeza no proxy publicado (aba
+       "Produtos Jurídicos - Mmm/AAAA" do mês corrente e do anterior); as
+       chaves mês a mês podem não existir lá e ficam como reserva. */
+    const hoje0 = new Date(), dif = (hoje0.getFullYear() * 12 + hoje0.getMonth()) - (m.ano * 12 + m.mes);
+    // As chaves mês a mês montam a aba com o ANO CORRENTE: fora dele só vale prodAnterior (dezembro visto em janeiro)
+    const tentativas = (dif === 0 ? ['prodAtual'] : dif === 1 ? ['prodAnterior'] : [])
+      .concat(m.ano === hoje0.getFullYear() ? ['prodNova' + chave, 'revSaude' + chave, 'prodAntiga' + chave] : []);
+    if (!tentativas.length) throw new Error('aba do mês não encontrada');
     let ultimoErro = null;
     for (const fonte of tentativas) {
       try {
