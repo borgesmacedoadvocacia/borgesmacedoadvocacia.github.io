@@ -1141,7 +1141,7 @@ async function buscarTudo() {
      reabrir o compartilhamento, nao como rede de seguranca. */
   const id = idPesquisa();
   if (!id) throw new Error('SEM_PLANILHA');
-  const [respostas] = await lerAbasDe(id, [ABA_RESPOSTAS + '!A1:Z20000']);
+  const [respostas] = await lerAbasDe(id, [ABA_RESPOSTAS + '!A:Z']);
   return montarBase(tabela(respostas || []));
 }
 

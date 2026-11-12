@@ -506,7 +506,7 @@ footer .err{color:var(--muted)}
     const aba = PROC.ABA_PREFIXO + MESES[m.mes] + '/' + m.ano;
     let g;
     try {
-      const url = `https://sheets.googleapis.com/v4/spreadsheets/${PROC.SHEET_ID}?ranges=${encodeURIComponent(aba + '!A1:I100')}` +
+      const url = `https://sheets.googleapis.com/v4/spreadsheets/${PROC.SHEET_ID}?ranges=${encodeURIComponent(aba + '!A:I')}` +
         `&includeGridData=true&fields=sheets(data(rowData(values(formattedValue,effectiveFormat(backgroundColor)))))&key=${PROC.GOOGLE_API_KEY}&_=${Date.now()}`;
       const r = await fetch(url, { cache: 'no-store' });
       if (!r.ok) throw new Error('HTTP ' + r.status);
@@ -550,7 +550,7 @@ footer .err{color:var(--muted)}
   /* Aba Alvarás (API v4: a aba tem linhas ocultas, que o gviz não devolve).
      A receber = soma de "Valor a Receber" das linhas cuja "Situação Alvará" não é "Recebido". */
   async function lerAlvarasReceber() {
-    const url = `https://sheets.googleapis.com/v4/spreadsheets/${EXEC.SHEET_ID}/values/${encodeURIComponent("'Alvarás'!A1:AA1000")}` +
+    const url = `https://sheets.googleapis.com/v4/spreadsheets/${EXEC.SHEET_ID}/values/${encodeURIComponent("'Alvarás'!A:AA")}` +
       `?valueRenderOption=FORMATTED_VALUE&key=${EXEC.GOOGLE_API_KEY}&_=${Date.now()}`;
     const r = await fetch(url, { cache: 'no-store' });
     if (!r.ok) throw new Error('HTTP ' + r.status);
