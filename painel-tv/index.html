@@ -572,7 +572,7 @@ footer .err{color:var(--muted)}
   /* Aba "TODAS AS DILIGÊNCIAS": mesma leitura do dashboard-diligencias.
      Linha vale se tem PROCESSO (D) ou data de lançamento (B); STATUS em J. */
   async function lerDiligencias() {
-    const url = `https://sheets.googleapis.com/v4/spreadsheets/${DIL.SHEET_ID}/values/${encodeURIComponent("'TODAS AS DILIGÊNCIAS'!A1:S600")}` +
+    const url = `https://sheets.googleapis.com/v4/spreadsheets/${DIL.SHEET_ID}/values/${encodeURIComponent("'TODAS AS DILIGÊNCIAS'!A:S")  /* colunas inteiras: o teto antigo de 600 linhas cortava as diligências novas (nov/2026) */}` +
       `?valueRenderOption=FORMATTED_VALUE&key=${DIL.GOOGLE_API_KEY}&_=${Date.now()}`;
     const r = await fetch(url, { cache: 'no-store' });
     if (!r.ok) throw new Error('HTTP ' + r.status);
